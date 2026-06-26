@@ -44,4 +44,14 @@ class RepeatSpecTest {
         // +1d→Sat(excluded) +1d→Sun(excluded) +1d→Mon = 2026-06-08
         assertEquals(LocalDateTime.of(2026, 6, 8, 8, 0), spec.next(base));
     }
+
+    // #4: rep=1d;in=2 — 指定曜日のみ（火曜→翌火曜）
+    @Test
+    void inDayOnly() {
+        // 2026-06-02 = Tuesday
+        LocalDateTime base = LocalDateTime.of(2026, 6, 2, 8, 0);
+        RepeatSpec spec = RepeatSpec.parse("rep=1d;in=2");
+        // next Tuesday = 2026-06-09
+        assertEquals(LocalDateTime.of(2026, 6, 9, 8, 0), spec.next(base));
+    }
 }

@@ -63,9 +63,12 @@ public final class RepeatSpec {
                 } else {
                     throw new IllegalArgumentException("unknown unit: '" + last + "' in: " + repeat);
                 }
+            } else if (p.startsWith("ex=")) {
+                for (String d : p.substring(3).split(",")) {
+                    excluded[Integer.parseInt(d.trim())] = true;
+                }
             } else {
-                // other commands (ex/in/dai/day/kuriage) not yet implemented
-                throw new UnsupportedOperationException("command not yet handled: '" + p + "' in: " + repeat);
+                throw new IllegalArgumentException("unknown command: '" + p + "' in: " + repeat);
             }
         }
 
