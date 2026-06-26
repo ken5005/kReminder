@@ -5,6 +5,9 @@ build/
 !**/src/test/**/build/
 .kotlin
 
+### ken
+privateFiles/
+
 ### IntelliJ IDEA ###
 .idea/modules.xml
 .idea/jarRepositories.xml
