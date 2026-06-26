@@ -42,12 +42,26 @@ public final class RepeatSpec {
             if (p.startsWith("rep=")) {
                 String val = p.substring(4);
                 char last = val.charAt(val.length() - 1);
-                if (last == 'd') {
+                if (last == 'M') {
+                    unit = Unit.MONTH;
+                    repeatVal = Integer.parseInt(val.substring(0, val.length() - 1));
+                } else if (last == 'd') {
                     unit = Unit.DAY;
                     repeatVal = Integer.parseInt(val.substring(0, val.length() - 1));
+                } else if (last == 'h') {
+                    unit = Unit.HOUR;
+                    repeatVal = Integer.parseInt(val.substring(0, val.length() - 1));
+                } else if (last == 'm') {
+                    unit = Unit.MINUTE;
+                    repeatVal = Integer.parseInt(val.substring(0, val.length() - 1));
+                } else if (last == 's') {
+                    unit = Unit.SECOND;
+                    repeatVal = Integer.parseInt(val.substring(0, val.length() - 1));
+                } else if (Character.isDigit(last)) {
+                    unit = Unit.MINUTE;
+                    repeatVal = Integer.parseInt(val);
                 } else {
-                    // other units (h/m/s/M/digit-only) not yet implemented
-                    throw new UnsupportedOperationException("unit not yet handled: '" + last + "' in: " + repeat);
+                    throw new IllegalArgumentException("unknown unit: '" + last + "' in: " + repeat);
                 }
             } else {
                 // other commands (ex/in/dai/day/kuriage) not yet implemented
