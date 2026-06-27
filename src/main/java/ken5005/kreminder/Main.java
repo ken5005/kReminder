@@ -28,9 +28,22 @@ public class Main {
                 r.noticed = true;
                 changed = true;
                 showPopup(r);
+                reschedule(r, now);
             }
         }
         if (changed) ReminderStore.save(reminders);
+    }
+
+    private static void reschedule(Reminder r, LocalDateTime now) {
+        if (r.repeat == null || r.repeat.isEmpty()) return;
+        try {
+            RepeatSpec spec = RepeatSpec.parse(r.repeat);
+            r.fireAt  = spec.nextAfter(r.fireAt, now, HolidayCheck.NONE);
+            r.noticed = false;
+        } catch (Exception e) {
+            // 壊れた repeat 文字列は本体を巻き込まない — noticed=true のまま単発扱い
+            System.err.println("bad repeat, treated as one-shot: " + r.repeat + " / " + e);
+        }
     }
 
     private static void showPopup(Reminder r) {

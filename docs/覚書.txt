@@ -1,0 +1,50 @@
+gitの流れ
+
+今後慣れてきて手抜きしたければ
+１．今のブランチを作る 
+２．addしてcommitする 
+３．GitHubにmeargeする&その他全部後片付け
+をそれぞれこう打つ(c:/Users/ken/Documents/PowerShell/Microsoft.PowerShell_profile.ps1に定義してある)
+
+gstart some-new-feature
+gsave "v0.6: areya koreya wo tuika"
+gship
+
+alias版
+
+git sw -c feature/some-new-feature
+git aa
+git cm "v0.6: areya koreya wo tuika"
+git push -u origin feature/some-new-feature
+gh pr create --fill
+gh pr merge --merge
+git sw main
+git pull
+git br -d feature/some-new-feature
+git tag v0.6
+git push origin v0.6
+
+
+alias使わない版
+
+git switch -c feature/some-new-feature
+↑作業ブランチを切って移動（mainを汚さない）
+git add -A
+↑変更を全部ステージ（サブフォルダも含めて更新された全て）
+git commit -m "v0.6: areya koreya wo tuika"
+↑コミット（メッセージは適当に調整可）
+git push -u origin feature/some-new-feature
+↑リモートにブランチを上げる（-uで追跡設定、次回からgit pushだけでOK）
+gh pr create --fill
+↑PR作成（コミット内容で自動記入）
+gh pr merge --merge
+↑PRをmainにマージ（マージコミット型）
+git switch main
+↑mainに戻る
+git pull
+↑マージ結果をローカルmainに取り込む
+git branch -d feature/some-new-feature
+↑用済みブランチを削除
+仕上げにタグ打つなら:
+git tag v0.6
+git push origin v0.6
