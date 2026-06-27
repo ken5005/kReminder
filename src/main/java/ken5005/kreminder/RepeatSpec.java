@@ -1,6 +1,7 @@
 package ken5005.kreminder;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.Set;
 
 public final class RepeatSpec {
@@ -66,6 +67,11 @@ public final class RepeatSpec {
             } else if (p.startsWith("ex=")) {
                 for (String d : p.substring(3).split(",")) {
                     excluded[Integer.parseInt(d.trim())] = true;
+                }
+            } else if (p.startsWith("in=")) {
+                Arrays.fill(excluded, true);  // exclude all, then open specified
+                for (String d : p.substring(3).split(",")) {
+                    excluded[Integer.parseInt(d.trim())] = false;
                 }
             } else {
                 throw new IllegalArgumentException("unknown command: '" + p + "' in: " + repeat);
