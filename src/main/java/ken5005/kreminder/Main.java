@@ -1,23 +1,33 @@
 package ken5005.kreminder;
 
+import ken5005.kreminder.holiday.HolidayService;
+
 import javax.swing.*;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class Main {
 
+    private static final AtomicReference<HolidayCheck> holidayRef = new AtomicReference<>(HolidayCheck.NONE);
+
     public static void main(String[] args) {
+        // Load cached holidays synchronously before starting the timer
+        holidayRef.set(HolidayService.loadInitial());
+
         SwingUtilities.invokeLater(() -> {
             List<Reminder> reminders = ReminderStore.load();
             // TODO (known): past unfired reminders fire immediately on startup.
-            //  v0.1 accepts this as a natural result of the 1-sec loop.
             //  A future version must decide: fire-immediately / skip / batch-notify.
             Timer timer = new Timer(1000, e -> checkReminders(reminders));
             timer.start();
             setupTray(timer);
         });
+
+        // Background refresh — updates holidayRef when a newer CSV is fetched
+        HolidayService.refreshAsync(newCheck -> holidayRef.set(newCheck));
     }
 
     private static void checkReminders(List<Reminder> reminders) {
@@ -38,7 +48,7 @@ public class Main {
         if (r.repeat == null || r.repeat.isEmpty()) return;
         try {
             RepeatSpec spec = RepeatSpec.parse(r.repeat);
-            r.fireAt  = spec.nextAfter(r.fireAt, now, HolidayCheck.NONE);
+            r.fireAt  = spec.nextAfter(r.fireAt, now, holidayRef.get());
             r.noticed = false;
         } catch (Exception e) {
             // 壊れた repeat 文字列は本体を巻き込まない — noticed=true のまま単発扱い
