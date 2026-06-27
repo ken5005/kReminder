@@ -55,6 +55,16 @@ class RepeatSpecTest {
         assertEquals(LocalDateTime.of(2026, 6, 9, 8, 0), spec.next(base));
     }
 
+    // #9: nextAfter — 取りこぼしスキップ
+    @Test
+    void catchUpSkip() {
+        // rep=1d, from=06-01 08:00, now=06-05 10:00 → skip 06-02〜06-05 → 06-06 08:00
+        RepeatSpec spec = RepeatSpec.parse("rep=1d");
+        LocalDateTime from = LocalDateTime.of(2026, 6, 1, 8, 0);
+        LocalDateTime now  = LocalDateTime.of(2026, 6, 5, 10, 0);
+        assertEquals(LocalDateTime.of(2026, 6, 6, 8, 0), spec.nextAfter(from, now));
+    }
+
     // #8: rep=1M;day=25;kuriage;ex=0,6 — 7/25は土→繰り上げで金曜へ
     @Test
     void monthlyRollUp() {
