@@ -55,6 +55,15 @@ class RepeatSpecTest {
         assertEquals(LocalDateTime.of(2026, 6, 9, 8, 0), spec.next(base));
     }
 
+    // #11: rep=1M;day=31 — 末日clamp（2月に31日は無い）
+    @Test
+    void endOfMonthClamp() {
+        // from=2026-01-15: set to Jan-31, +1M → Feb-28 (2026 is not a leap year)
+        LocalDateTime base = LocalDateTime.of(2026, 1, 15, 8, 0);
+        RepeatSpec spec = RepeatSpec.parse("rep=1M;day=31");
+        assertEquals(LocalDateTime.of(2026, 2, 28, 8, 0), spec.next(base));
+    }
+
     // #10: parse 例外 — 未知命令 / day=N を月次以外で使う
     @Test
     void parseExceptions() {
