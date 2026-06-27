@@ -23,6 +23,7 @@ public class ReminderStore {
 
     private static final Gson GSON = new GsonBuilder()
         .setPrettyPrinting()
+        .disableHtmlEscaping()
         .registerTypeAdapter(LocalDateTime.class, new TypeAdapter<LocalDateTime>() {
             @Override
             public void write(JsonWriter out, LocalDateTime v) throws IOException {
