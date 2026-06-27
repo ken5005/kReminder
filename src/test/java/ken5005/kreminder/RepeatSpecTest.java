@@ -54,4 +54,19 @@ class RepeatSpecTest {
         // next Tuesday = 2026-06-09
         assertEquals(LocalDateTime.of(2026, 6, 9, 8, 0), spec.next(base));
     }
+
+    // #5: rep=1d;in=4;dai=1,3 — 第1・第3木曜のみ
+    @Test
+    void inDayAndWeekOfMonth() {
+        // 2026-06-01 = Monday (week 1)
+        LocalDateTime base = LocalDateTime.of(2026, 6, 1, 8, 0);
+        RepeatSpec spec = RepeatSpec.parse("rep=1d;in=4;dai=1,3");
+
+        // first hit: 2026-06-04 Thu week-1
+        LocalDateTime first = spec.next(base);
+        assertEquals(LocalDateTime.of(2026, 6, 4, 8, 0), first);
+
+        // second hit: 2026-06-18 Thu week-3 (week-2 Thu 2026-06-11 skipped)
+        assertEquals(LocalDateTime.of(2026, 6, 18, 8, 0), spec.next(first));
+    }
 }

@@ -2,6 +2,7 @@ package ken5005.kreminder;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Set;
 
 public final class RepeatSpec {
@@ -72,6 +73,11 @@ public final class RepeatSpec {
                 Arrays.fill(excluded, true);  // exclude all, then open specified
                 for (String d : p.substring(3).split(",")) {
                     excluded[Integer.parseInt(d.trim())] = false;
+                }
+            } else if (p.startsWith("dai=")) {
+                allowedWeeks = new HashSet<>();
+                for (String w : p.substring(4).split(",")) {
+                    allowedWeeks.add(Integer.parseInt(w.trim()));
                 }
             } else {
                 throw new IllegalArgumentException("unknown command: '" + p + "' in: " + repeat);
