@@ -79,6 +79,8 @@ public final class RepeatSpec {
                 for (String w : p.substring(4).split(",")) {
                     allowedWeeks.add(Integer.parseInt(w.trim()));
                 }
+            } else if (p.startsWith("day=")) {
+                absDay = Integer.parseInt(p.substring(4).trim());
             } else {
                 throw new IllegalArgumentException("unknown command: '" + p + "' in: " + repeat);
             }

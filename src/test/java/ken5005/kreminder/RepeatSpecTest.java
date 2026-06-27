@@ -55,6 +55,15 @@ class RepeatSpecTest {
         assertEquals(LocalDateTime.of(2026, 6, 9, 8, 0), spec.next(base));
     }
 
+    // #6: rep=1M;day=25 — 月次＋絶対日（起点は翌月）
+    @Test
+    void monthlyAbsDay() {
+        // 2026-06-25: day already 25; next must be 2026-07-25
+        LocalDateTime base = LocalDateTime.of(2026, 6, 25, 8, 0);
+        RepeatSpec spec = RepeatSpec.parse("rep=1M;day=25");
+        assertEquals(LocalDateTime.of(2026, 7, 25, 8, 0), spec.next(base));
+    }
+
     // #5: rep=1d;in=4;dai=1,3 — 第1・第3木曜のみ
     @Test
     void inDayAndWeekOfMonth() {
