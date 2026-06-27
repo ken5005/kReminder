@@ -55,6 +55,17 @@ class RepeatSpecTest {
         assertEquals(LocalDateTime.of(2026, 6, 9, 8, 0), spec.next(base));
     }
 
+    // #10: parse 例外 — 未知命令 / day=N を月次以外で使う
+    @Test
+    void parseExceptions() {
+        // unknown command
+        assertThrows(IllegalArgumentException.class,
+            () -> RepeatSpec.parse("rep=1d;foo=3"));
+        // day=N without monthly unit
+        assertThrows(IllegalArgumentException.class,
+            () -> RepeatSpec.parse("rep=1d;day=25"));
+    }
+
     // #9: nextAfter — 取りこぼしスキップ
     @Test
     void catchUpSkip() {

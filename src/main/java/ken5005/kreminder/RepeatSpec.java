@@ -89,6 +89,8 @@ public final class RepeatSpec {
         }
 
         if (unit == null) throw new IllegalArgumentException("rep= is required in: " + repeat);
+        if (absDay != 0 && unit != Unit.MONTH)
+            throw new IllegalArgumentException("day=N requires rep unit M in: " + repeat);
         return new RepeatSpec(repeat, repeatVal, unit, excluded, allowedWeeks, absDay, kuriage);
     }
 
