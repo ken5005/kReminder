@@ -55,6 +55,15 @@ class RepeatSpecTest {
         assertEquals(LocalDateTime.of(2026, 6, 9, 8, 0), spec.next(base));
     }
 
+    // #7: rep=1M;day=25;ex=0,6 — 7/25は土→繰り下げで月曜へ
+    @Test
+    void monthlyRollDown() {
+        // 2026-07-25 = Saturday → skip Sat, skip Sun → 2026-07-27 Mon
+        LocalDateTime base = LocalDateTime.of(2026, 6, 25, 8, 0);
+        RepeatSpec spec = RepeatSpec.parse("rep=1M;day=25;ex=0,6");
+        assertEquals(LocalDateTime.of(2026, 7, 27, 8, 0), spec.next(base));
+    }
+
     // #6: rep=1M;day=25 — 月次＋絶対日（起点は翌月）
     @Test
     void monthlyAbsDay() {
