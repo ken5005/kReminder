@@ -55,6 +55,15 @@ class RepeatSpecTest {
         assertEquals(LocalDateTime.of(2026, 6, 9, 8, 0), spec.next(base));
     }
 
+    // #8: rep=1M;day=25;kuriage;ex=0,6 — 7/25は土→繰り上げで金曜へ
+    @Test
+    void monthlyRollUp() {
+        // 2026-07-25 = Saturday → kuriage → 2026-07-24 Fri
+        LocalDateTime base = LocalDateTime.of(2026, 6, 25, 8, 0);
+        RepeatSpec spec = RepeatSpec.parse("rep=1M;day=25;kuriage;ex=0,6");
+        assertEquals(LocalDateTime.of(2026, 7, 24, 8, 0), spec.next(base));
+    }
+
     // #7: rep=1M;day=25;ex=0,6 — 7/25は土→繰り下げで月曜へ
     @Test
     void monthlyRollDown() {

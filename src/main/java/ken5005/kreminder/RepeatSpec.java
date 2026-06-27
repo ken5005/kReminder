@@ -81,6 +81,8 @@ public final class RepeatSpec {
                 }
             } else if (p.startsWith("day=")) {
                 absDay = Integer.parseInt(p.substring(4).trim());
+            } else if (p.equals("kuriage")) {
+                kuriage = true;
             } else {
                 throw new IllegalArgumentException("unknown command: '" + p + "' in: " + repeat);
             }
