@@ -8,6 +8,7 @@ build/
 ### ken
 privateFiles/
 docs/*.html
+docs/**/*.html
 
 ### IntelliJ IDEA ###
 .idea/modules.xml
