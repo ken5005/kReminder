@@ -73,6 +73,11 @@ javaw -jar build/libs/kReminder-0.3.1-all.jar
 HTTP 取得成功後に検証/パース失敗した場合、生 CSV を `%APPDATA%\kReminder\holiday_last_failure.csv` に保存。
 このファイルと stderr ログを見れば「内閣府がまた仕様変更した」等の原因を即診断できる。
 
+### HolidayService シグネチャ（v0.3.2 以降の参照用）
+
+`loadInitial(Clock)` / `refreshAsync(Consumer<HolidayCheck>, Clock)` — Clock を外から注入する設計。
+`shouldRefresh(LocalDateTime, LocalDateTime)` は pure function のままで変更なし。
+
 ### v0.3.2 予定
 
 - **トレイ色ステータス**: 緑（最新正常）/ 黄（キャッシュで稼働中）/ 赤（NONE に縮退）
@@ -88,6 +93,45 @@ HTTP 取得成功後に検証/パース失敗した場合、生 CSV を `%APPDAT
 
 起動時に過ぎた未通知 `fireAt` は即発火する（1秒ループの自然な結果）。
 **完成版では「過去分の扱い（即発火 / スキップ / まとめ通知）」を必ず設計し直す**。
+
+## デバッグ用 fake-clock
+
+`--fake-now=YYYY-MM-DDTHH:mm:ss` を渡すと、指定日時を起点とした `Clock.offset(...)` で動作する。
+リマインダー発火判定（`checkReminders`）と祝日サービス（鮮度判定・当年チェック・キャッシュ保存時刻）がすべて fake 時刻ベースになる。
+
+```
+java -jar build\libs\kReminder-0.3.1-all.jar --fake-now=2026-05-05T08:55:00
+```
+
+起動直後に以下のバナーがコンソールへ出力される:
+
+```
+[fake-clock] fake-now=2026-05-05T08:55:00  offset=PT...
+```
+
+不正値（フォーマット違い等）は stderr にエラーを出力して `exit(1)`。
+
+### fake-clock での動作確認手順
+
+`reminders.json` に `fireAt` を fake-now より過去に設定しておくと起動直後に発火する。
+
+```json
+[
+  {
+    "fireAt": "2026-05-05T08:54:55",
+    "message": "fake-clock テスト",
+    "priority": "Pri3",
+    "action": "",
+    "noticed": false,
+    "repeat": ""
+  }
+]
+```
+
+```
+gradlew shadowJar
+java -jar build\libs\kReminder-0.3.1-all.jar --fake-now=2026-05-05T08:55:00
+```
 
 ## テスト方法
 
