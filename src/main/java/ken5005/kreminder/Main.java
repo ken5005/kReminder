@@ -50,7 +50,7 @@ public class Main {
     }
 
     private static void checkReminders(List<Reminder> reminders) {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
         boolean changed = false;
         for (Reminder r : reminders) {
             if (!r.noticed && r.fireAt != null && !r.fireAt.isAfter(now)) {
