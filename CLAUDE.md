@@ -100,16 +100,18 @@ HTTP 取得成功後に検証/パース失敗した場合、生 CSV を `%APPDAT
 リマインダー発火判定（`checkReminders`）と祝日サービス（鮮度判定・当年チェック・キャッシュ保存時刻）がすべて fake 時刻ベースになる。
 
 ```
-java -jar build\libs\kReminder-0.3.1-all.jar --fake-now=2026-05-05T08:55:00
+java -jar build\libs\kReminder-VERSION-all.jar --fake-now=2026-05-05T08:55:00
 ```
 
 起動直後に以下のバナーがコンソールへ出力される:
 
 ```
-[fake-clock] fake-now=2026-05-05T08:55:00  offset=PT...
+[fake-clock] fake-now=2026-05-05T08:55:00  offset=PT-1315H-5M
 ```
 
 不正値（フォーマット違い等）は stderr にエラーを出力して `exit(1)`。
+
+**本番で誤って `--fake-now` 付きで起動した場合、バナーが出ていたら引数を外して再起動すること。**
 
 ### fake-clock での動作確認手順
 
@@ -130,7 +132,7 @@ java -jar build\libs\kReminder-0.3.1-all.jar --fake-now=2026-05-05T08:55:00
 
 ```
 gradlew shadowJar
-java -jar build\libs\kReminder-0.3.1-all.jar --fake-now=2026-05-05T08:55:00
+java -jar build\libs\kReminder-VERSION-all.jar --fake-now=2026-05-05T08:55:00
 ```
 
 ## テスト方法
