@@ -5,15 +5,34 @@ import ken5005.kreminder.holiday.HolidayService;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class Main {
 
+    private static Clock clock = Clock.systemDefaultZone();
     private static final AtomicReference<HolidayCheck> holidayRef = new AtomicReference<>(HolidayCheck.NONE);
 
     public static void main(String[] args) {
+        for (String arg : args) {
+            if (arg.startsWith("--fake-now=")) {
+                String value = arg.substring("--fake-now=".length());
+                try {
+                    LocalDateTime fakeNow = LocalDateTime.parse(value);
+                    Duration offset = Duration.between(LocalDateTime.now(), fakeNow);
+                    clock = Clock.offset(Clock.systemDefaultZone(), offset);
+                    System.out.println("[fake-clock] fake-now=" + fakeNow + "  offset=" + offset);
+                } catch (DateTimeParseException e) {
+                    System.err.println("kReminder: invalid --fake-now value: \"" + value + "\"  (expected YYYY-MM-DDTHH:mm:ss)");
+                    System.exit(1);
+                }
+            }
+        }
+
         // Load cached holidays synchronously before starting the timer
         holidayRef.set(HolidayService.loadInitial());
 
