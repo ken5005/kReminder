@@ -4,6 +4,7 @@ import ken5005.kreminder.HolidayCheck;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -39,7 +40,7 @@ public final class HolidayService {
      * Synchronous startup load. Returns a HolidayTable if cache exists, NONE otherwise.
      * Always returns immediately.
      */
-    public static HolidayCheck loadInitial() {
+    public static HolidayCheck loadInitial(Clock clock) {
         HolidayCache.CacheData cache = HolidayCache.load();
         if (cache == null) {
             System.err.println("HolidayService: no cache found, starting with NONE (holidays ignored)");
@@ -54,12 +55,12 @@ public final class HolidayService {
      * Background refresh. Calls onUpdate only on success; on failure keeps existing HolidayCheck.
      * Skips fetch when cache is fresh (< 1 day old).
      */
-    public static void refreshAsync(Consumer<HolidayCheck> onUpdate) {
+    public static void refreshAsync(Consumer<HolidayCheck> onUpdate, Clock clock) {
         EXECUTOR.submit(() -> {
             HolidayCache.CacheData existing = HolidayCache.load();
             LocalDateTime fetchedAt = existing != null ? existing.fetchedAt() : null;
 
-            if (!shouldRefresh(fetchedAt, LocalDateTime.now())) {
+            if (!shouldRefresh(fetchedAt, LocalDateTime.now(clock))) {
                 System.out.println("HolidayService: cache is fresh, skipping network refresh");
                 return;
             }
@@ -92,14 +93,14 @@ public final class HolidayService {
                 saveFailureCsv(raw);
                 return;
             }
-            LocalDate newYear = LocalDate.of(LocalDate.now().getYear(), 1, 1);
+            LocalDate newYear = LocalDate.of(LocalDate.now(clock).getYear(), 1, 1);
             if (!holidays.containsKey(newYear)) {
                 System.err.println("HolidayService: rejected — missing " + newYear + " sanity check");
                 saveFailureCsv(raw);
                 return;
             }
 
-            LocalDateTime now = LocalDateTime.now();
+            LocalDateTime now = LocalDateTime.now(clock);
             HolidayCache.save(now, holidays);
             System.out.println("HolidayService: refreshed " + holidays.size() + " holidays");
             onUpdate.accept(new HolidayTable(holidays));

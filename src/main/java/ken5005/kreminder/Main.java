@@ -34,7 +34,7 @@ public class Main {
         }
 
         // Load cached holidays synchronously before starting the timer
-        holidayRef.set(HolidayService.loadInitial());
+        holidayRef.set(HolidayService.loadInitial(clock));
 
         SwingUtilities.invokeLater(() -> {
             List<Reminder> reminders = ReminderStore.load();
@@ -46,7 +46,7 @@ public class Main {
         });
 
         // Background refresh — updates holidayRef when a newer CSV is fetched
-        HolidayService.refreshAsync(newCheck -> holidayRef.set(newCheck));
+        HolidayService.refreshAsync(newCheck -> holidayRef.set(newCheck), clock);
     }
 
     private static void checkReminders(List<Reminder> reminders) {
