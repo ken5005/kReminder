@@ -17,6 +17,7 @@ public final class HolidayService {
     private static final int MIN_BYTES = 1_024;
     private static final int MAX_BYTES = 1_048_576;
     private static final int MIN_COUNT = 10;
+    static final int MIN_CURRENT_YEAR_COUNT = 12;
 
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "holiday-fetcher");
@@ -25,6 +26,15 @@ public final class HolidayService {
     });
 
     private HolidayService() {}
+
+    /**
+     * Pure function — testable without I/O.
+     * Returns true if holidays contains at least min entries for the given year.
+     */
+    public static boolean hasEnoughCurrentYearHolidays(Map<LocalDate, String> holidays, int year, int min) {
+        long count = holidays.keySet().stream().filter(d -> d.getYear() == year).count();
+        return count >= min;
+    }
 
     /**
      * Pure function — testable without I/O.
@@ -96,6 +106,15 @@ public final class HolidayService {
             LocalDate newYear = LocalDate.of(LocalDate.now(clock).getYear(), 1, 1);
             if (!holidays.containsKey(newYear)) {
                 System.err.println("HolidayService: rejected — missing " + newYear + " sanity check");
+                saveFailureCsv(raw);
+                return;
+            }
+
+            int currentYear = LocalDate.now(clock).getYear();
+            if (!hasEnoughCurrentYearHolidays(holidays, currentYear, MIN_CURRENT_YEAR_COUNT)) {
+                long yearCount = holidays.keySet().stream().filter(d -> d.getYear() == currentYear).count();
+                System.err.println("HolidayService: rejected — too few holidays for " + currentYear
+                    + ": " + yearCount + " (need " + MIN_CURRENT_YEAR_COUNT + ")");
                 saveFailureCsv(raw);
                 return;
             }
