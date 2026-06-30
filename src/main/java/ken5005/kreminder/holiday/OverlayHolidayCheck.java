@@ -32,6 +32,9 @@ public final class OverlayHolidayCheck implements HolidayCheck {
         return addMap.isEmpty() && removeSet.isEmpty();
     }
 
+    public int addCount() { return addMap.size(); }
+    public int removeCount() { return removeSet.size(); }
+
     /** Returns a new OverlayHolidayCheck with the same add/remove overlay but a different base. */
     public OverlayHolidayCheck withBase(HolidayCheck newBase) {
         return new OverlayHolidayCheck(newBase, addMap, removeSet);

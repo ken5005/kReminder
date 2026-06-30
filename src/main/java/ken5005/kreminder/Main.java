@@ -25,6 +25,10 @@ public class Main {
     // Loaded once at startup; used to wrap every new base check with the same overlay.
     private static OverlayHolidayCheck loadedOverride;
 
+    // Tray icon — set by setupTray; updated from the 1-second EDT timer.
+    private static TrayIcon trayIcon;
+    private static HolidayStatus lastTrayStatus;
+
     public static void main(String[] args) {
         for (String arg : args) {
             if (arg.startsWith("--fake-now=")) {
@@ -52,14 +56,17 @@ public class Main {
             List<Reminder> reminders = ReminderStore.load();
             // TODO (known): past unfired reminders fire immediately on startup.
             //  A future version must decide: fire-immediately / skip / batch-notify.
-            Timer timer = new Timer(1000, e -> checkReminders(reminders));
+            Timer timer = new Timer(1000, e -> {
+                checkReminders(reminders);
+                updateTrayStatus();
+            });
             timer.start();
             setupTray(timer);
         });
 
         // Background refresh — updates holidayRef when a newer CSV is fetched
         HolidayService.refreshAsync(
-            () -> holidayRef.get(),
+            holidayRef::get,
             newState -> {
                 // For OK (new CSV): apply overlay to the raw base check.
                 // For DEGRADED: newState.check() is already the current overlay-applied check.
@@ -104,6 +111,43 @@ public class Main {
         }
     }
 
+    /** Called from the 1-second EDT timer — refreshes tray icon and tooltip when status changes. */
+    private static void updateTrayStatus() {
+        if (trayIcon == null) return;
+        HolidayStatus status = holidayRef.get().status();
+        if (status == lastTrayStatus) return;
+        lastTrayStatus = status;
+        trayIcon.setImage(createIcon(statusColor(status)));
+        trayIcon.setToolTip(buildTooltip(status));
+    }
+
+    private static Color statusColor(HolidayStatus status) {
+        return switch (status) {
+            case OK       -> new Color(50, 180, 50);
+            case DEGRADED -> new Color(220, 180, 0);
+            case NONE     -> new Color(200, 60, 60);
+        };
+    }
+
+    private static Image createIcon(Color color) {
+        BufferedImage img = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
+        Graphics g = img.getGraphics();
+        g.setColor(color);
+        g.fillOval(2, 2, 12, 12);
+        g.dispose();
+        return img;
+    }
+
+    private static String buildTooltip(HolidayStatus status) {
+        String label = switch (status) {
+            case OK       -> "正常";
+            case DEGRADED -> "縮退";
+            case NONE     -> "無視";
+        };
+        return "kReminder — 祝日:" + label
+            + "（override +" + loadedOverride.addCount() + "/-" + loadedOverride.removeCount() + "）";
+    }
+
     private static void showPopup(Reminder r) {
         JDialog dialog = new JDialog((Frame) null, "kReminder", true);
         dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
@@ -130,14 +174,11 @@ public class Main {
     private static void setupTray(Timer timer) {
         if (!SystemTray.isSupported()) return;
 
-        BufferedImage img = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
-        Graphics g = img.getGraphics();
-        g.setColor(new Color(70, 130, 180));
-        g.fillOval(2, 2, 12, 12);
-        g.dispose();
+        HolidayStatus initialStatus = holidayRef.get().status();
+        lastTrayStatus = initialStatus;
 
         PopupMenu popup = new PopupMenu();
-        TrayIcon trayIcon = new TrayIcon(img, "kReminder", popup);
+        trayIcon = new TrayIcon(createIcon(statusColor(initialStatus)), buildTooltip(initialStatus), popup);
 
         MenuItem exit = new MenuItem("Exit kReminder");
         exit.addActionListener(e -> {
