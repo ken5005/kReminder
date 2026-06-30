@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 public final class HolidayService {
 
@@ -47,25 +48,26 @@ public final class HolidayService {
     }
 
     /**
-     * Synchronous startup load. Returns a HolidayTable if cache exists, NONE otherwise.
+     * Synchronous startup load. Returns HolidayState with OK if cache exists, NONE otherwise.
      * Always returns immediately.
      */
-    public static HolidayCheck loadInitial(Clock clock) {
+    public static HolidayState loadInitial(Clock clock) {
         HolidayCache.CacheData cache = HolidayCache.load();
         if (cache == null) {
             System.err.println("HolidayService: no cache found, starting with NONE (holidays ignored)");
-            return HolidayCheck.NONE;
+            return new HolidayState(HolidayCheck.NONE, HolidayStatus.NONE);
         }
         System.out.println("HolidayService: loaded " + cache.holidays().size()
             + " holidays from cache (fetched " + cache.fetchedAt() + ")");
-        return new HolidayTable(cache.holidays());
+        return new HolidayState(new HolidayTable(cache.holidays()), HolidayStatus.OK);
     }
 
     /**
-     * Background refresh. Calls onUpdate only on success; on failure keeps existing HolidayCheck.
-     * Skips fetch when cache is fresh (< 1 day old).
+     * Background refresh. Calls onUpdate on success or on degraded transition.
+     * Skips fetch when cache is fresh (< 1 day old) — no callback in that case.
+     * On failure: emits DEGRADED (preserving current check) unless current status is already NONE.
      */
-    public static void refreshAsync(Consumer<HolidayCheck> onUpdate, Clock clock) {
+    public static void refreshAsync(Supplier<HolidayState> current, Consumer<HolidayState> onUpdate, Clock clock) {
         EXECUTOR.submit(() -> {
             HolidayCache.CacheData existing = HolidayCache.load();
             LocalDateTime fetchedAt = existing != null ? existing.fetchedAt() : null;
@@ -80,12 +82,14 @@ public final class HolidayService {
                 raw = HolidayFetcher.fetch();
             } catch (Exception e) {
                 System.err.println("HolidayService: fetch failed: " + e.getMessage());
+                emitDegradedIfNeeded(current, onUpdate);
                 return;
             }
 
             if (raw.length < MIN_BYTES || raw.length >= MAX_BYTES) {
                 System.err.println("HolidayService: rejected — invalid size " + raw.length);
                 saveFailureCsv(raw);
+                emitDegradedIfNeeded(current, onUpdate);
                 return;
             }
 
@@ -95,18 +99,21 @@ public final class HolidayService {
             } catch (IllegalArgumentException e) {
                 System.err.println("HolidayService: rejected — parse failed: " + e.getMessage());
                 saveFailureCsv(raw);
+                emitDegradedIfNeeded(current, onUpdate);
                 return;
             }
 
             if (holidays.size() < MIN_COUNT) {
                 System.err.println("HolidayService: rejected — too few entries: " + holidays.size());
                 saveFailureCsv(raw);
+                emitDegradedIfNeeded(current, onUpdate);
                 return;
             }
             LocalDate newYear = LocalDate.of(LocalDate.now(clock).getYear(), 1, 1);
             if (!holidays.containsKey(newYear)) {
                 System.err.println("HolidayService: rejected — missing " + newYear + " sanity check");
                 saveFailureCsv(raw);
+                emitDegradedIfNeeded(current, onUpdate);
                 return;
             }
 
@@ -116,14 +123,22 @@ public final class HolidayService {
                 System.err.println("HolidayService: rejected — too few holidays for " + currentYear
                     + ": " + yearCount + " (need " + MIN_CURRENT_YEAR_COUNT + ")");
                 saveFailureCsv(raw);
+                emitDegradedIfNeeded(current, onUpdate);
                 return;
             }
 
             LocalDateTime now = LocalDateTime.now(clock);
             HolidayCache.save(now, holidays);
             System.out.println("HolidayService: refreshed " + holidays.size() + " holidays");
-            onUpdate.accept(new HolidayTable(holidays));
+            onUpdate.accept(new HolidayState(new HolidayTable(holidays), HolidayStatus.OK));
         });
+    }
+
+    private static void emitDegradedIfNeeded(Supplier<HolidayState> current, Consumer<HolidayState> onUpdate) {
+        HolidayState cur = current.get();
+        if (cur.status() != HolidayStatus.NONE) {
+            onUpdate.accept(new HolidayState(cur.check(), HolidayStatus.DEGRADED));
+        }
     }
 
     private static void saveFailureCsv(byte[] raw) {
