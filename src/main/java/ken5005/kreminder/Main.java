@@ -1,5 +1,6 @@
 package ken5005.kreminder;
 
+import ken5005.kreminder.holiday.HolidayLog;
 import ken5005.kreminder.holiday.HolidayOverride;
 import ken5005.kreminder.holiday.HolidayService;
 import ken5005.kreminder.holiday.HolidayState;
@@ -47,10 +48,13 @@ public class Main {
 
         // Load override file once — holds add/remove sets for the session
         loadedOverride = HolidayOverride.load(HolidayCheck.NONE);
+        HolidayLog.log(clock, "[Main] override loaded: +" + loadedOverride.addCount()
+            + "/-" + loadedOverride.removeCount());
 
         // Load cached holidays synchronously before starting the timer
         HolidayState initial = HolidayService.loadInitial(clock);
         holidayRef.set(new HolidayState(applyOverride(initial.check()), initial.status()));
+        HolidayLog.log(clock, "[Main] loadInitial: " + initial.status());
 
         SwingUtilities.invokeLater(() -> {
             List<Reminder> reminders = ReminderStore.load();
@@ -68,12 +72,14 @@ public class Main {
         HolidayService.refreshAsync(
             holidayRef::get,
             newState -> {
+                HolidayStatus prevStatus = holidayRef.get().status();
                 // For OK (new CSV): apply overlay to the raw base check.
                 // For DEGRADED: newState.check() is already the current overlay-applied check.
                 HolidayCheck activeCheck = newState.status() == HolidayStatus.OK
                     ? applyOverride(newState.check())
                     : newState.check();
                 holidayRef.set(new HolidayState(activeCheck, newState.status()));
+                HolidayLog.log(clock, "[Main] status: " + prevStatus + " -> " + newState.status());
             },
             clock
         );

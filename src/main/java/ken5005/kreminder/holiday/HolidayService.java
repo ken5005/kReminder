@@ -74,22 +74,27 @@ public final class HolidayService {
 
             if (!shouldRefresh(fetchedAt, LocalDateTime.now(clock))) {
                 System.out.println("HolidayService: cache is fresh, skipping network refresh");
+                HolidayLog.log(clock, "[HolidayService] cache is fresh, skipping network refresh");
                 return;
             }
+
+            HolidayLog.log(clock, "[HolidayService] refresh started");
 
             byte[] raw;
             try {
                 raw = HolidayFetcher.fetch();
             } catch (Exception e) {
                 System.err.println("HolidayService: fetch failed: " + e.getMessage());
-                emitDegradedIfNeeded(current, onUpdate);
+                HolidayLog.log(clock, "[HolidayService] rejected: fetch failed: " + e.getMessage());
+                emitDegradedIfNeeded(current, onUpdate, clock);
                 return;
             }
 
             if (raw.length < MIN_BYTES || raw.length >= MAX_BYTES) {
                 System.err.println("HolidayService: rejected — invalid size " + raw.length);
+                HolidayLog.log(clock, "[HolidayService] rejected: invalid size " + raw.length);
                 saveFailureCsv(raw);
-                emitDegradedIfNeeded(current, onUpdate);
+                emitDegradedIfNeeded(current, onUpdate, clock);
                 return;
             }
 
@@ -98,22 +103,25 @@ public final class HolidayService {
                 holidays = HolidayCsvParser.parse(raw);
             } catch (IllegalArgumentException e) {
                 System.err.println("HolidayService: rejected — parse failed: " + e.getMessage());
+                HolidayLog.log(clock, "[HolidayService] rejected: parse failed: " + e.getMessage());
                 saveFailureCsv(raw);
-                emitDegradedIfNeeded(current, onUpdate);
+                emitDegradedIfNeeded(current, onUpdate, clock);
                 return;
             }
 
             if (holidays.size() < MIN_COUNT) {
                 System.err.println("HolidayService: rejected — too few entries: " + holidays.size());
+                HolidayLog.log(clock, "[HolidayService] rejected: too few entries: " + holidays.size());
                 saveFailureCsv(raw);
-                emitDegradedIfNeeded(current, onUpdate);
+                emitDegradedIfNeeded(current, onUpdate, clock);
                 return;
             }
             LocalDate newYear = LocalDate.of(LocalDate.now(clock).getYear(), 1, 1);
             if (!holidays.containsKey(newYear)) {
                 System.err.println("HolidayService: rejected — missing " + newYear + " sanity check");
+                HolidayLog.log(clock, "[HolidayService] rejected: missing " + newYear + " sanity check");
                 saveFailureCsv(raw);
-                emitDegradedIfNeeded(current, onUpdate);
+                emitDegradedIfNeeded(current, onUpdate, clock);
                 return;
             }
 
@@ -122,22 +130,28 @@ public final class HolidayService {
                 long yearCount = holidays.keySet().stream().filter(d -> d.getYear() == currentYear).count();
                 System.err.println("HolidayService: rejected — too few holidays for " + currentYear
                     + ": " + yearCount + " (need " + MIN_CURRENT_YEAR_COUNT + ")");
+                HolidayLog.log(clock, "[HolidayService] rejected: too few holidays for " + currentYear
+                    + ": " + yearCount + " (need " + MIN_CURRENT_YEAR_COUNT + ")");
                 saveFailureCsv(raw);
-                emitDegradedIfNeeded(current, onUpdate);
+                emitDegradedIfNeeded(current, onUpdate, clock);
                 return;
             }
 
             LocalDateTime now = LocalDateTime.now(clock);
             HolidayCache.save(now, holidays);
             System.out.println("HolidayService: refreshed " + holidays.size() + " holidays");
+            HolidayLog.log(clock, "[HolidayService] refreshed " + holidays.size() + " holidays");
             onUpdate.accept(new HolidayState(new HolidayTable(holidays), HolidayStatus.OK));
         });
     }
 
-    private static void emitDegradedIfNeeded(Supplier<HolidayState> current, Consumer<HolidayState> onUpdate) {
+    private static void emitDegradedIfNeeded(Supplier<HolidayState> current, Consumer<HolidayState> onUpdate, Clock clock) {
         HolidayState cur = current.get();
         if (cur.status() != HolidayStatus.NONE) {
+            HolidayLog.log(clock, "[HolidayService] degraded: preserving existing check (was " + cur.status() + ")");
             onUpdate.accept(new HolidayState(cur.check(), HolidayStatus.DEGRADED));
+        } else {
+            HolidayLog.log(clock, "[HolidayService] degraded: current is NONE, not emitting");
         }
     }
 
