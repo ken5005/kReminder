@@ -68,6 +68,11 @@ git log --oneline --stat HEAD..origin/main    # ファイル名＋増減行数
 git diff --stat HEAD..origin/main             # 全体合計でファイル一覧
 git diff --name-only HEAD..origin/main        # ファイル名だけシンプルに
 
+今コミットしたやつが以前とどう変わったかのdiffを全表示
+git show HEAD
+
+さっきコミットしたと今のローカルがどう変わったかのdiffを全表示
+git diff HEAD
 
 PowerShellでは%APPDATA%は展開されない。$env:APPDATAを使う
 (エラーにならず単に%APPDATA%というそのままの文字列として扱われる。
