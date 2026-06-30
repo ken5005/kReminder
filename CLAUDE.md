@@ -16,12 +16,12 @@
 gradlew shadowJar
 ```
 
-`build/libs/kReminder-0.3.1-all.jar` が生成される。
+`build/libs/kReminder-0.3.2-all.jar` が生成される。
 
 ## 起動
 
 ```
-javaw -jar build/libs/kReminder-0.3.1-all.jar
+javaw -jar build/libs/kReminder-0.3.2-all.jar
 ```
 
 コンソール不要の GUI アプリ（`javaw` 推奨）。システムトレイに常駐し、
@@ -73,15 +73,75 @@ javaw -jar build/libs/kReminder-0.3.1-all.jar
 HTTP 取得成功後に検証/パース失敗した場合、生 CSV を `%APPDATA%\kReminder\holiday_last_failure.csv` に保存。
 このファイルと stderr ログを見れば「内閣府がまた仕様変更した」等の原因を即診断できる。
 
-### HolidayService シグネチャ（v0.3.2 以降の参照用）
+### HolidayService シグネチャ（v0.3.1）
 
 `loadInitial(Clock)` / `refreshAsync(Consumer<HolidayCheck>, Clock)` — Clock を外から注入する設計。
-`shouldRefresh(LocalDateTime, LocalDateTime)` は pure function のままで変更なし。
+`shouldRefresh(LocalDateTime, LocalDateTime)` は pure function。
 
-### v0.3.2 予定
+## v0.3.2: 祝日サブシステム拡充
 
-- **トレイ色ステータス**: 緑（最新正常）/ 黄（キャッシュで稼働中）/ 赤（NONE に縮退）
-- **手動オーバーライド**: `%APPDATA%\kReminder\holidays-override.json` で祝日の追加・除外
+### 追加クラス
+
+| クラス | 役割 |
+|---|---|
+| `HolidayStatus` | `OK / DEGRADED / NONE` ステータス enum |
+| `HolidayState` | `record(HolidayCheck check, HolidayStatus status)` |
+| `OverlayHolidayCheck` | base + add/remove オーバーレイ。`remove` が `add`・CSV 両方に勝つ。イミュータブル |
+| `HolidayOverride` | `holiday_override.json` を読んで `OverlayHolidayCheck` を生成 |
+| `HolidayLog` | `holiday.log` へ1行追記。clock 基準タイムスタンプ。例外を投げない |
+
+### 祝日ステータスとトレイ色
+
+| ステータス | 意味 | トレイアイコン色 |
+|---|---|---|
+| `OK` | 最新 CSV 採用中 | 緑 |
+| `DEGRADED` | 取得/検証失敗、前回キャッシュで稼働中 | 黄 |
+| `NONE` | キャッシュ無し、祝日判定を無視 | 赤 |
+
+トレイ tooltip: `kReminder — 祝日:正常/縮退/無視（override +N/-M）`
+
+ステータスは1秒ごとの EDT Timer でチェックし、変化時のみアイコンと tooltip を更新する。
+
+### 手動オーバーライド
+
+`%APPDATA%\kReminder\holiday_override.json`（なければ `user.home` フォールバック）を起動時1回ロード。
+
+```json
+{
+  "add": [{"date": "2026-07-20", "name": "独自休日"}],
+  "remove": ["2026-01-01"]
+}
+```
+
+- `add` に指定した日付は CSV にない祝日として追加される
+- `remove` は CSV・`add` の両方に勝って祝日から除外する
+- ファイルなし → 空オーバーレイ（エラーでない）
+- 壊れた JSON → stderr + 空オーバーレイ（本体は止めない）
+
+### 採用判定の厳密化
+
+既存チェック（サイズ 1KB〜1MB・件数 10件以上・当年1/1）に加え:
+- 当年の祝日が **12件以上**（`MIN_CURRENT_YEAR_COUNT = 12`）
+
+### HolidayService シグネチャ（v0.3.2）
+
+`loadInitial(Clock)` → `HolidayState`
+`refreshAsync(Supplier<HolidayState>, Consumer<HolidayState>, Clock)`
+`shouldRefresh(LocalDateTime, LocalDateTime)` / `hasEnoughCurrentYearHolidays(Map, int, int)` は pure function のまま。
+
+### 祝日ログ
+
+`%APPDATA%\kReminder\holiday.log` に追記形式。タイムスタンプは Clock 基準（`yyyy-MM-dd HH:mm:ss`）。
+
+主なログイベント:
+- `[Main] override loaded: +N/-M`
+- `[Main] loadInitial: OK / NONE`
+- `[Main] status: PREV -> NEW`（refreshAsync コールバック時）
+- `[HolidayService] cache is fresh, skipping network refresh`
+- `[HolidayService] refresh started`
+- `[HolidayService] rejected: <理由>`（各検証ステップ）
+- `[HolidayService] refreshed N holidays`
+- `[HolidayService] degraded: ...`
 
 ## v0.1 にまだ無いもの
 
