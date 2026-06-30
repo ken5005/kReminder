@@ -35,6 +35,7 @@ git commit -m "v0.6: areya koreya wo tuika"
 ↑コミット（メッセージは適当に調整可）
 git push -u origin feature/some-new-feature
 ↑リモートにブランチを上げる（-uで追跡設定、次回からgit pushだけでOK）
+↑なお、ブランチじゃなくmainをただ上げる場合は「git push origin main」とする
 gh pr create --fill
 ↑PR作成（コミット内容で自動記入）
 gh pr merge --merge
@@ -48,3 +49,31 @@ git branch -d feature/some-new-feature
 仕上げにタグ打つなら:
 git tag v0.6
 git push origin v0.6
+
+別マシンに移動したときのキャッチアップ手順
+
+cd C:\tools2\java\IntelliJ\proj\kReminder   # プロジェクトパス
+git status                                  # 作業ツリーがクリーンか先に確認
+						# もしクリーンじゃなくて、理由が双方で同じ変更しちゃった時に限り
+						#→git checkout -- abc.txt 等としてこちらでの変更を無かったことにするのはあり
+git fetch --tags			# ローカルのリモート追跡ブランチorigin/mainに一旦持ってくる。「タグも一緒に取る」とおまじない的に明示
+git log --oneline -20 HEAD..origin/main	# 何が降りてくるか先見する（HEADからみてorigin/mainで追加されたcommitを列挙）
+git pull				#fetchとmeargeを一気に行う	
+git lg                                  # alias の1行ログで 最新タグ見えるはず
+
+
+先見するやつの亜種たち
+git log --oneline -20 HEAD..origin/main	      # commitを列挙
+git log --oneline --stat HEAD..origin/main    # ファイル名＋増減行数
+git diff --stat HEAD..origin/main             # 全体合計でファイル一覧
+git diff --name-only HEAD..origin/main        # ファイル名だけシンプルに
+
+今コミットしたやつが以前とどう変わったかのdiffを全表示
+git show HEAD
+
+さっきコミットしたと今のローカルがどう変わったかのdiffを全表示
+git diff HEAD
+
+PowerShellでは%APPDATA%は展開されない。$env:APPDATAを使う
+(エラーにならず単に%APPDATA%というそのままの文字列として扱われる。
+NotFoundエラーになってもメッセージをよく見れば気付ける)
