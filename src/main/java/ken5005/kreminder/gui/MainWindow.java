@@ -7,9 +7,12 @@ import java.awt.*;
 
 /**
  * kReminder のメイン画面。
- * スライス①-a step2: reminders.json を読み、生の6列テーブルとして表示する。
+ * スライス①-a step3: ツールバー＋ダミーボタン＋ステータスバーを追加。
  */
 public class MainWindow extends JFrame {
+
+    // ステータスバーは ActionListener から更新するためフィールドに持つ
+    private final JLabel statusBar = new JLabel(" ");
 
     public MainWindow() {
         super("kReminder");
@@ -19,16 +22,32 @@ public class MainWindow extends JFrame {
         // ×ボタンで JVM ごと終了（常駐トレイ版とは切り離した学習用 main 前提）
         setDefaultCloseOperation(EXIT_ON_CLOSE);
 
-        // reminders.json を読む。失敗時は ReminderStore.load() が空リストを返すので here は常に非 null
-        var reminders = ReminderStore.load();
+        getContentPane().add(buildToolBar(), BorderLayout.NORTH);
+        getContentPane().add(buildTable(),   BorderLayout.CENTER);
+        getContentPane().add(statusBar,      BorderLayout.SOUTH);
+    }
 
-        // TableModel にドメインリストを渡す。整形・判断は model 外へ（今回は raw のまま）
+    /** ツールバーを組み立てる。ボタン機能は seam のみ——将来コントローラへ委譲する。 */
+    private JToolBar buildToolBar() {
+        var bar = new JToolBar();
+        bar.setFloatable(false); // ドラッグで切り離せないようにする（常設ツールバーの慣用）
+
+        // 各ボタンの ActionListener はステータスバーを更新するだけ（業務ロジックなし）
+        for (String name : new String[]{"新規", "編集", "複製", "削除", "更新", "デバッグログ"}) {
+            var btn = new JButton(name);
+            btn.addActionListener(e -> statusBar.setText(name + " が押されました"));
+            bar.add(btn);
+        }
+        return bar;
+    }
+
+    /** テーブルを組み立てる。読込失敗時は空リストで起動（ReminderStore.load() が保証）。 */
+    private JScrollPane buildTable() {
+        var reminders = ReminderStore.load();
         var model = new ReminderTableModel(reminders);
         var table = new JTable(model);
-
         // JScrollPane に載せないとヘッダ（列名）が表示されない — これは JTable の仕様
-        var scrollPane = new JScrollPane(table);
-        getContentPane().add(scrollPane, BorderLayout.CENTER);
+        return new JScrollPane(table);
     }
 
     /**
