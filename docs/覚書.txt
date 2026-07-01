@@ -71,9 +71,17 @@ git diff --name-only HEAD..origin/main        # ファイル名だけシンプ�
 今コミットしたやつが以前とどう変わったかのdiffを全表示
 git show HEAD
 
+今コミットしたCLAUDE.mdが2つ前のcommit時点とどう変わったかのdiff
+git show HEAD~2 -- CLAUDE.md
+
 さっきコミットしたと今のローカルがどう変わったかのdiffを全表示
 git diff HEAD
 
 PowerShellでは%APPDATA%は展開されない。$env:APPDATAを使う
 (エラーにならず単に%APPDATA%というそのままの文字列として扱われる。
 NotFoundエラーになってもメッセージをよく見れば気付ける)
+
+
+todo (kReminder)
+
+なにかあればここに書く
