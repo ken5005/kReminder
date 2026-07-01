@@ -85,3 +85,7 @@ NotFoundエラーになってもメッセージをよく見れば気付ける)
 todo (kReminder)
 
 なにかあればここに書く
+
+実家マシンでやる事。
+↓「LF will be replaced by CRLF の warning 」が毎回出るのを抑止。一度やればOK。
+git config --global core.safecrlf false
