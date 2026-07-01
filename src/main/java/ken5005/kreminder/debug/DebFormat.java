@@ -9,17 +9,17 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 
 /**
- * Pure string formatting for DEB. No Swing, no java.io side effects beyond the
- * in-memory buffer used to render a stack trace — safe to unit test directly.
+ * DEB用の純粋な文字列整形。Swingもjava.ioも使わない（stack trace整形の
+ * 一時バッファを除く）＝ユニットテストで縛れる。
  */
 public final class DebFormat {
 
-    // DateTimeFormatter is thread-safe (unlike SimpleDateFormat) — one shared instance is fine.
+    // DateTimeFormatterはスレッド安全（SimpleDateFormatと違う）なので共有インスタンスでよい。
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss.SSS");
 
     private DebFormat() {}
 
-    /** Formats varargs like the original prMul: null -> "(null) ", Double -> 4 decimals, else toString(). */
+    /** 元のprMul相当：null→"(null) "、Double→小数4桁、それ以外はtoString()。 */
     public static String formatArgs(Object... args) {
         if (args == null || args.length == 0) return "";
         StringBuilder sb = new StringBuilder();
@@ -43,7 +43,7 @@ public final class DebFormat {
         return formatTime(LocalDateTime.ofInstant(instant, zone));
     }
 
-    /** Renders a Throwable's stack trace to a String, decoding explicitly as UTF-8. */
+    /** Throwableのstack traceを文字列化する。UTF-8であることを明示的にデコードする。 */
     public static String formatStackTrace(Throwable t) {
         if (t == null) return "(null)";
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -53,7 +53,7 @@ public final class DebFormat {
         return baos.toString(StandardCharsets.UTF_8);
     }
 
-    /** Final one-line formatting: time prefix + body. */
+    /** 1行分の最終整形：時刻プレフィックス＋本文。 */
     public static String formatLine(LocalDateTime time, String body) {
         return formatTime(time) + " " + body;
     }

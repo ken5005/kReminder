@@ -1,6 +1,6 @@
 package ken5005.kreminder.debug;
 
-/** Writes each line to System.out. */
+/** 各行をSystem.outへ出力する。 */
 public final class ConsoleSink implements LogSink {
 
     @Override
@@ -15,6 +15,6 @@ public final class ConsoleSink implements LogSink {
 
     @Override
     public void close() {
-        // System.out is not ours to close.
+        // System.outは自分が開いたものではないので閉じない。
     }
 }

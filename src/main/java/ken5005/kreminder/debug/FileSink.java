@@ -11,9 +11,9 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 /**
- * Appends lines to %APPDATA%\kReminder\logs\DEB-yyyyMMdd-HH.txt, rotating to a
- * new file whenever the clock's hour changes. All IO failures are swallowed
- * and reported to stderr — a logging failure must never take down the app.
+ * %APPDATA%\kReminder\logs\DEB-yyyyMMdd-HH.txt へ追記する。Clockの時が
+ * 変わったら新しいファイルへロールオーバーする。IO失敗は全て握って
+ * stderrへ出すだけ — ログの失敗が本体を巻き込んではいけない。
  */
 public final class FileSink implements LogSink {
 
