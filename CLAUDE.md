@@ -30,6 +30,7 @@ javaw -jar build/libs/kReminder-0.3.2-all.jar
 ## v0.1 のスコープ（最小縦スライス）
 
 実装済み:
+
 - データモデル `Reminder`（6フィールド: fireAt / message / priority / action / noticed / repeat）
 - 永続化: `%APPDATA%\kReminder\reminders.json`（Gson, UTF-8）。APPDATA 未設定時は `user.home` フォールバック
 - 常駐ループ: Swing Timer 1秒ごとに全件チェック → `!noticed && fireAt <= now` で最小ポップアップ → `noticed=true` → 保存
@@ -40,14 +41,14 @@ javaw -jar build/libs/kReminder-0.3.2-all.jar
 
 ### クラス構成
 
-| クラス | 役割 |
-|---|---|
-| `HolidayCheck` | `isHoliday(LocalDate)` の関数型 interface。`NONE` 実装（常 false）で縮退時の代替として使う |
-| `HolidayTable` | `Map<LocalDate, String>` を保持するイミュータブルな実装。`isHoliday` と `getName` を提供 |
-| `HolidayCsvParser` | `byte[]`（MS932）→ `Map<LocalDate, String>`。純関数・I/O なし |
-| `HolidayCache` | `%APPDATA%\kReminder\holidays.json` の読み書き |
-| `HolidayFetcher` | 内閣府 CSV を HTTP 取得して `byte[]` を返す。I/O のみ |
-| `HolidayService` | オーケストレータ。`loadInitial()`（同期）と `refreshAsync()`（バックグラウンド）を提供 |
+| クラス                | 役割                                                                   |
+| ------------------ | -------------------------------------------------------------------- |
+| `HolidayCheck`     | `isHoliday(LocalDate)` の関数型 interface。`NONE` 実装（常 false）で縮退時の代替として使う |
+| `HolidayTable`     | `Map<LocalDate, String>` を保持するイミュータブルな実装。`isHoliday` と `getName` を提供 |
+| `HolidayCsvParser` | `byte[]`（MS932）→ `Map<LocalDate, String>`。純関数・I/O なし                 |
+| `HolidayCache`     | `%APPDATA%\kReminder\holidays.json` の読み書き                            |
+| `HolidayFetcher`   | 内閣府 CSV を HTTP 取得して `byte[]` を返す。I/O のみ                              |
+| `HolidayService`   | オーケストレータ。`loadInitial()`（同期）と `refreshAsync()`（バックグラウンド）を提供          |
 
 ### キャッシュ
 
@@ -75,28 +76,27 @@ HTTP 取得成功後に検証/パース失敗した場合、生 CSV を `%APPDAT
 
 ### HolidayService シグネチャ（v0.3.1）
 
-`loadInitial(Clock)` / `refreshAsync(Consumer<HolidayCheck>, Clock)` — Clock を外から注入する設計。
-`shouldRefresh(LocalDateTime, LocalDateTime)` は pure function。
+`loadInitial(Clock)` / `refreshAsync(Consumer<HolidayCheck>, Clock)` — Clock を外から注入する設計。 `shouldRefresh(LocalDateTime, LocalDateTime)` は pure function。
 
 ## v0.3.2: 祝日サブシステム拡充
 
 ### 追加クラス
 
-| クラス | 役割 |
-|---|---|
-| `HolidayStatus` | `OK / DEGRADED / NONE` ステータス enum |
-| `HolidayState` | `record(HolidayCheck check, HolidayStatus status)` |
+| クラス                   | 役割                                                          |
+| --------------------- | ----------------------------------------------------------- |
+| `HolidayStatus`       | `OK / DEGRADED / NONE` ステータス enum                           |
+| `HolidayState`        | `record(HolidayCheck check, HolidayStatus status)`          |
 | `OverlayHolidayCheck` | base + add/remove オーバーレイ。`remove` が `add`・CSV 両方に勝つ。イミュータブル |
-| `HolidayOverride` | `holiday_override.json` を読んで `OverlayHolidayCheck` を生成 |
-| `HolidayLog` | `holiday.log` へ1行追記。clock 基準タイムスタンプ。例外を投げない |
+| `HolidayOverride`     | `holiday_override.json` を読んで `OverlayHolidayCheck` を生成      |
+| `HolidayLog`          | `holiday.log` へ1行追記。clock 基準タイムスタンプ。例外を投げない                 |
 
 ### 祝日ステータスとトレイ色
 
-| ステータス | 意味 | トレイアイコン色 |
-|---|---|---|
-| `OK` | 最新 CSV 採用中 | 緑 |
-| `DEGRADED` | 取得/検証失敗、前回キャッシュで稼働中 | 黄 |
-| `NONE` | キャッシュ無し、祝日判定を無視 | 赤 |
+| ステータス      | 意味                  | トレイアイコン色 |
+| ---------- | ------------------- | -------- |
+| `OK`       | 最新 CSV 採用中          | 緑        |
+| `DEGRADED` | 取得/検証失敗、前回キャッシュで稼働中 | 黄        |
+| `NONE`     | キャッシュ無し、祝日判定を無視     | 赤        |
 
 トレイ tooltip: `kReminder — 祝日:正常/縮退/無視（override +N/-M）`
 
@@ -106,7 +106,7 @@ HTTP 取得成功後に検証/パース失敗した場合、生 CSV を `%APPDAT
 
 `%APPDATA%\kReminder\holiday_override.json`（なければ `user.home` フォールバック）を起動時1回ロード。
 
-```json
+```
 {
   "add": [{"date": "2026-07-20", "name": "独自休日"}],
   "remove": ["2026-01-01"]
@@ -121,19 +121,19 @@ HTTP 取得成功後に検証/パース失敗した場合、生 CSV を `%APPDAT
 ### 採用判定の厳密化
 
 既存チェック（サイズ 1KB〜1MB・件数 10件以上・当年1/1）に加え:
+
 - 当年の祝日が **12件以上**（`MIN_CURRENT_YEAR_COUNT = 12`）
 
 ### HolidayService シグネチャ（v0.3.2）
 
-`loadInitial(Clock)` → `HolidayState`
-`refreshAsync(Supplier<HolidayState>, Consumer<HolidayState>, Clock)`
-`shouldRefresh(LocalDateTime, LocalDateTime)` / `hasEnoughCurrentYearHolidays(Map, int, int)` は pure function のまま。
+`loadInitial(Clock)` → `HolidayState` `refreshAsync(Supplier<HolidayState>, Consumer<HolidayState>, Clock)` `shouldRefresh(LocalDateTime, LocalDateTime)` / `hasEnoughCurrentYearHolidays(Map, int, int)` は pure function のまま。
 
 ### 祝日ログ
 
 `%APPDATA%\kReminder\holiday.log` に追記形式。タイムスタンプは Clock 基準（`yyyy-MM-dd HH:mm:ss`）。
 
 主なログイベント:
+
 - `[Main] override loaded: +N/-M`
 - `[Main] loadInitial: OK / NONE`
 - `[Main] status: PREV -> NEW`（refreshAsync コールバック時）
@@ -151,8 +151,7 @@ HTTP 取得成功後に検証/パース失敗した場合、生 CSV を `%APPDAT
 
 ## 既知の TODO（コード内コメント参照）
 
-起動時に過ぎた未通知 `fireAt` は即発火する（1秒ループの自然な結果）。
-**完成版では「過去分の扱い（即発火 / スキップ / まとめ通知）」を必ず設計し直す**。
+起動時に過ぎた未通知 `fireAt` は即発火する（1秒ループの自然な結果）。 **完成版では「過去分の扱い（即発火 / スキップ / まとめ通知）」を必ず設計し直す**。
 
 ## デバッグ用 fake-clock
 
@@ -177,7 +176,7 @@ java -jar build\libs\kReminder-VERSION-all.jar --fake-now=2026-05-05T08:55:00
 
 `reminders.json` に `fireAt` を fake-now より過去に設定しておくと起動直後に発火する。
 
-```json
+```
 [
   {
     "fireAt": "2026-05-05T08:54:55",
@@ -200,7 +199,7 @@ java -jar build\libs\kReminder-VERSION-all.jar --fake-now=2026-05-05T08:55:00
 `%APPDATA%\kReminder\reminders.json` を手編集して数秒後の `fireAt` を1件入れ、起動する。
 ポップアップが出て OK で消え、`noticed: true` で保存されれば OK。
 
-```json
+```
 [
   {
     "fireAt": "2026-06-24T15:30:00",
@@ -212,3 +211,21 @@ java -jar build\libs\kReminder-VERSION-all.jar --fake-now=2026-05-05T08:55:00
   }
 ]
 ```
+
+## GUI 目標アーキテクチャ（全スライス共通・責務境界を漏らさない）
+
+小さい勉強アプリだが、MVC の責務境界は徹底する。層は上→下の一方向依存：
+
+- **ドメイン**: `Reminder`（不変データ）, `RepeatSpec`（純関数）
+- **永続化**: `ReminderStore`（JSON load/save）— UI を一切 import しない
+- **表示ロジック（純関数）**: `toJapanese` / 残り時間整形 / `isVisible`・`bucketOf`・`leadWindowOf` / ソート比較器。**Swing も java.io も Gson も import しない**＝全てユニットテスト可能に保つ
+- **ビュー**: `MainWindow` 等の Swing ウィジェット。描画と入力受けのみ・業務判断をしない。`ReminderTableModel`（`AbstractTableModel`）がドメインの `List<Reminder>` と `JTable` を橋渡しする
+- **コントローラ**: ボタン/メニュー操作を受けて Store とモデルを更新。ビューはリスナ経由で通知するだけ。（編集スライス③で初登場・それまでは seam だけ）
+
+### 境界ルール
+
+- ビューに業務ロジックを置かない。整形は純関数へ、データ変更はコントローラへ委譲する
+- 純関数クラスは Swing / java.io / Gson を import しない（テストで縛れる状態を保つ＝この不変条件が MVC の生命線）
+- `ReminderStore` は Swing を import しない
+- 新機能は「**純関数＋テスト → 薄いビュー配線**」の順で足す
+- **過剰設計はしない（YAGNI）**。将来分は抽象化を先に建てるのではなく、seam（差し込み口）だけ開けておく。層を増やすことが MVC ではなく、責務の境界を漏らさないことが MVC
