@@ -77,10 +77,20 @@ git show HEAD~2 -- CLAUDE.md
 さっきコミットしたと今のローカルがどう変わったかのdiffを全表示
 git diff HEAD
 
+いまどのブランチにいるのか
+git branch --show-current
+git status(git st)の１行目にも出てるが
+
 PowerShellでは%APPDATA%は展開されない。$env:APPDATAを使う
 (エラーにならず単に%APPDATA%というそのままの文字列として扱われる。
 NotFoundエラーになってもメッセージをよく見れば気付ける)
 
+グローバルのCLAUDE.mdは
+C:\Users\ken\.claude\CLAUDE.md
+.claude の場所を思い出す合言葉は 「exe は HOME 側・設定は USERPROFILE 側」。
+exe は C:\tools2\etc\home\.local\bin
+（HOME二重戸籍）だけど、設定データの .claude は %USERPROFILE%＝C:\Users\ken\.claude の方。
+C:\tools2\etc\home\.claude は存在しない。
 
 todo (kReminder)
 
@@ -89,3 +99,12 @@ todo (kReminder)
 実家マシンでやる事。
 ↓「LF will be replaced by CRLF の warning 」が毎回出るのを抑止。一度やればOK。
 git config --global core.safecrlf false
+
+C:\Users\ken\.claude\CLAUDE.mdに以下のブロックを追加（または母艦のをコピー。gitの外なんで自動同期されない）
+
+## コメント・ログの言語
+
+コード中のコメントは新規・既存問わず常に日本語で書く。ただし変数名・クラス名や、
+英語表記が一般的な専門用語（enqueue, flush, EDT, thread-safe 等）
+まで無理に和訳しない。ユーザーに見せるログ文字列も原則日本語。
+Claude Code がユーザーに向けて出す応答文（コード外の会話）も原則日本語。
