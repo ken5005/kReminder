@@ -1,19 +1,15 @@
 package ken5005.kreminder.gui;
 
 import ken5005.kreminder.ReminderStore;
-import ken5005.kreminder.debug.ConsoleSink;
 import ken5005.kreminder.debug.DEB;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.HierarchyEvent;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
-import java.time.Clock;
 
 /**
  * kReminder のメイン画面。
- * スライス①-b-2 step1: JSplitPaneで下段にデバッグログパネルを追加。
+ * スライス①-b-3: エントリポイントは Main.java に一本化。ここは窓の組み立てのみ担う。
  */
 public class MainWindow extends JFrame {
 
@@ -106,25 +102,8 @@ public class MainWindow extends JFrame {
         return new JScrollPane(table);
     }
 
-    /**
-     * 学習用の単独起動エントリポイント。
-     * Swing のコンポーネントはすべて EDT（Event Dispatch Thread）上で操作する決まりがあるため、
-     * invokeLater でウィンドウ生成も EDT に委ねる。
-     */
-    public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> {
-            var window = new MainWindow();
-            var panelSink = new PanelSink(window.debugPanel.getTextArea());
-            DEB.init(Clock.systemDefaultZone(), new ConsoleSink(), panelSink);
-
-            window.addWindowListener(new WindowAdapter() {
-                @Override
-                public void windowClosing(WindowEvent e) {
-                    DEB.shutdown();
-                }
-            });
-
-            window.setVisible(true);
-        });
+    /** PanelSink 生成用にデバッグパネルの JTextArea を取り出す。パネル内部構造を過度に公開しない範囲。 */
+    public JTextArea getDebugTextArea() {
+        return debugPanel.getTextArea();
     }
 }

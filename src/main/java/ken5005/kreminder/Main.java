@@ -1,5 +1,10 @@
 package ken5005.kreminder;
 
+import ken5005.kreminder.debug.ConsoleSink;
+import ken5005.kreminder.debug.DEB;
+import ken5005.kreminder.debug.FileSink;
+import ken5005.kreminder.gui.MainWindow;
+import ken5005.kreminder.gui.PanelSink;
 import ken5005.kreminder.holiday.HolidayLog;
 import ken5005.kreminder.holiday.HolidayOverride;
 import ken5005.kreminder.holiday.HolidayService;
@@ -9,6 +14,8 @@ import ken5005.kreminder.holiday.OverlayHolidayCheck;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
 import java.time.Clock;
 import java.time.Duration;
@@ -31,6 +38,7 @@ public class Main {
     private static HolidayStatus lastTrayStatus;
 
     public static void main(String[] args) {
+        boolean fakeClockUsed = false;
         for (String arg : args) {
             if (arg.startsWith("--fake-now=")) {
                 String value = arg.substring("--fake-now=".length());
@@ -39,12 +47,14 @@ public class Main {
                     Duration offset = Duration.between(LocalDateTime.now(), fakeNow);
                     clock = Clock.offset(Clock.systemDefaultZone(), offset);
                     System.out.println("[fake-clock] fake-now=" + fakeNow + "  offset=" + offset);
+                    fakeClockUsed = true;
                 } catch (DateTimeParseException e) {
                     System.err.println("kReminder: invalid --fake-now value: \"" + value + "\"  (expected YYYY-MM-DDTHH:mm:ss)");
                     System.exit(1);
                 }
             }
         }
+        final boolean fakeClockUsedFinal = fakeClockUsed;
 
         // Load override file once — holds add/remove sets for the session
         loadedOverride = HolidayOverride.load(HolidayCheck.NONE);
@@ -57,7 +67,23 @@ public class Main {
         HolidayLog.log(clock, "[Main] loadInitial: " + initial.status());
 
         SwingUtilities.invokeLater(() -> {
+            MainWindow window = new MainWindow();
+            PanelSink panelSink = new PanelSink(window.getDebugTextArea());
+            DEB.init(clock, new ConsoleSink(), new FileSink(clock), panelSink);
+            window.addWindowListener(new WindowAdapter() {
+                @Override
+                public void windowClosing(WindowEvent e) {
+                    DEB.shutdown();
+                }
+            });
+            window.setVisible(true);
+
+            DEB.pr(fakeClockUsedFinal ? "起動: kReminder（fake-clock使用）" : "起動: kReminder");
+
             List<Reminder> reminders = ReminderStore.load();
+            DEB.pr("reminders読込: " + reminders.size() + "件");
+            DEB.pr("祝日loadInitial: " + initial.status());
+
             // TODO (known): past unfired reminders fire immediately on startup.
             //  A future version must decide: fire-immediately / skip / batch-notify.
             Timer timer = new Timer(1000, e -> {
@@ -80,6 +106,7 @@ public class Main {
                     : newState.check();
                 holidayRef.set(new HolidayState(activeCheck, newState.status()));
                 HolidayLog.log(clock, "[Main] status: " + prevStatus + " -> " + newState.status());
+                DEB.pr("祝日status: " + prevStatus + " -> " + newState.status());
             },
             clock
         );
@@ -190,6 +217,7 @@ public class Main {
         exit.addActionListener(e -> {
             timer.stop();
             SystemTray.getSystemTray().remove(trayIcon);
+            DEB.shutdown();
             System.exit(0);
         });
         popup.add(exit);
