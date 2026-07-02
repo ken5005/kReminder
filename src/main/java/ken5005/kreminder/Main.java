@@ -67,7 +67,7 @@ public class Main {
         HolidayLog.log(clock, "[Main] loadInitial: " + initial.status());
 
         SwingUtilities.invokeLater(() -> {
-            MainWindow window = new MainWindow();
+            MainWindow window = new MainWindow(clock);
             PanelSink panelSink = new PanelSink(window.getDebugTextArea());
             DEB.init(clock, new ConsoleSink(), new FileSink(clock), panelSink);
             window.addWindowListener(new WindowAdapter() {
@@ -89,6 +89,7 @@ public class Main {
             Timer timer = new Timer(1000, e -> {
                 checkReminders(reminders);
                 updateTrayStatus();
+                window.tick();
             });
             timer.start();
             setupTray(timer);
