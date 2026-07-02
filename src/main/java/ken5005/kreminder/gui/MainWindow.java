@@ -6,6 +6,7 @@ import ken5005.kreminder.debug.DEB;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.HierarchyEvent;
+import java.time.Clock;
 
 /**
  * kReminder のメイン画面。
@@ -20,13 +21,18 @@ public class MainWindow extends JFrame {
     private final JLabel statusBar = new JLabel(" ");
     private final JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
     private final DebugPanel debugPanel = new DebugPanel();
+    private final Clock clock;
+
+    // 残り時間列は now 依存なので、Main の1秒 Timer から tick() で再描画させるために保持する
+    private ReminderTableModel tableModel;
 
     private boolean debugPanelOpen = false;
     private int savedDividerLocation = -1; // 未設定＝初回はDEFAULT_DEBUG_DIVIDER_RATIOを使う
     private boolean initialCollapseApplied = false;
 
-    public MainWindow() {
+    public MainWindow(Clock clock) {
         super("kReminder");
+        this.clock = clock;
         setSize(800, 500);
         // 画面中央に配置（null = 自画面基準）
         setLocationRelativeTo(null);
@@ -96,10 +102,15 @@ public class MainWindow extends JFrame {
     /** テーブルを組み立てる。読込失敗時は空リストで起動（ReminderStore.load() が保証）。 */
     private JScrollPane buildTable() {
         var reminders = ReminderStore.load();
-        var model = new ReminderTableModel(reminders);
-        var table = new JTable(model);
+        tableModel = new ReminderTableModel(reminders, clock);
+        var table = new JTable(tableModel);
         // JScrollPane に載せないとヘッダ（列名）が表示されない — これは JTable の仕様
         return new JScrollPane(table);
+    }
+
+    /** 1秒ごとに Main の Timer から呼ばれ、残り時間列を再描画させる。 */
+    public void tick() {
+        tableModel.tick();
     }
 
     /** PanelSink 生成用にデバッグパネルの JTextArea を取り出す。パネル内部構造を過度に公開しない範囲。 */
