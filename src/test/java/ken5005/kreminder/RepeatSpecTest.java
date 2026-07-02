@@ -64,7 +64,7 @@ class RepeatSpecTest {
         assertEquals(LocalDateTime.of(2026, 2, 28, 8, 0), spec.next(base));
     }
 
-    // #10: parse 例外 — 未知命令 / day=N を月次以外で使う
+    // #10: parse 例外 — 未知命令 / day=N を月次以外で使う / kuriage を月次以外で使う
     @Test
     void parseExceptions() {
         // unknown command
@@ -73,6 +73,15 @@ class RepeatSpecTest {
         // day=N without monthly unit
         assertThrows(IllegalArgumentException.class,
             () -> RepeatSpec.parse("rep=1d;day=25"));
+        // kuriage without monthly unit
+        assertThrows(IllegalArgumentException.class,
+            () -> RepeatSpec.parse("rep=1d;kuriage;ex=0"));
+    }
+
+    // 回帰: 月次 kuriage は従来どおり parse が通る
+    @Test
+    void monthlyKuriageStillParses() {
+        assertDoesNotThrow(() -> RepeatSpec.parse("rep=1M;day=25;kuriage;ex=0,6"));
     }
 
     // #9: nextAfter — 取りこぼしスキップ

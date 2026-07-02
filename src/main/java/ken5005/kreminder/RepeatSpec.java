@@ -91,6 +91,8 @@ public final class RepeatSpec {
         if (unit == null) throw new IllegalArgumentException("rep= is required in: " + repeat);
         if (absDay != 0 && unit != Unit.MONTH)
             throw new IllegalArgumentException("day=N requires rep unit M in: " + repeat);
+        if (kuriage && unit != Unit.MONTH)
+            throw new IllegalArgumentException("kuriage は月次(M)専用です: " + repeat);
         return new RepeatSpec(repeat, repeatVal, unit, excluded, allowedWeeks, absDay, kuriage);
     }
 
