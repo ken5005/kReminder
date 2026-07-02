@@ -19,6 +19,11 @@ public final class RepeatSpec {
 
     private static final int CAP = 100_000;
 
+    // 曜日: excluded[] のインデックス（0=日..6=土）に対応する表示文字
+    private static final String[] WEEKDAY_CHARS = {"日", "月", "火", "水", "木", "金", "土"};
+    // 表示順（月火水木金土日）を excluded[] インデックスの並びで表す
+    private static final int[] WEEKDAY_DISPLAY_ORDER = {1, 2, 3, 4, 5, 6, 0};
+
     private RepeatSpec(String raw, int repeatVal, Unit unit,
                        boolean[] excluded, Set<Integer> allowedWeeks,
                        int absDay, boolean kuriage) {
@@ -137,6 +142,84 @@ public final class RepeatSpec {
         LocalDateTime t = next(from, holiday);
         while (!t.isAfter(now)) t = next(t, holiday);
         return t;
+    }
+
+    /**
+     * repeat 生文字列を人間可読な1行に組み立てる（GUI仕様 v2 §6.1）。
+     * valid な spec のみを対象とする（不正 repeat は parse() で弾かれている前提）。
+     */
+    public String toJapanese() {
+        int excludedCount = 0;
+        for (boolean b : excluded) if (b) excludedCount++;
+        if (excludedCount == 7) {
+            throw new IllegalStateException("有効な曜日がありません: " + raw);
+        }
+
+        // bare形: 毎日(1d)＋曜日限定(許可1〜3＝除外4〜6)のとき「毎日」を落として曜日だけにする
+        boolean bare = unit == Unit.DAY && repeatVal == 1 && excludedCount >= 4;
+        if (bare) {
+            String daiPrefix = allowedWeeks == null ? "" : daiWeeksJoined();
+            return daiPrefix + weekdayString(true);
+        }
+
+        StringBuilder sb = new StringBuilder("毎").append(intervalWord());
+        if (absDay != 0) sb.append(absDay).append("日");
+        if (kuriage) sb.append("(繰上)");
+        if (allowedWeeks != null) {
+            sb.append(" ").append(daiWeeksJoined()).append("週");
+        }
+        if (excludedCount >= 1 && excludedCount <= 3) {
+            sb.append(" ").append(weekdayString(false)).append("除く");
+        } else if (excludedCount >= 4) {
+            sb.append(" ").append(weekdayString(true)).append("のみ");
+        }
+        return sb.toString();
+    }
+
+    // rep= の間隔部分を日本語化。月は12の倍数→年、日は7の倍数→週に畳む（端数は据え置き）
+    private String intervalWord() {
+        switch (unit) {
+            case MONTH:
+                if (repeatVal == 1) return "月";
+                if (repeatVal % 12 == 0) {
+                    int n = repeatVal / 12;
+                    return n == 1 ? "年" : n + "年";
+                }
+                return repeatVal + "ヶ月";
+            case DAY:
+                if (repeatVal == 1) return "日";
+                if (repeatVal % 7 == 0) {
+                    int n = repeatVal / 7;
+                    return n == 1 ? "週" : n + "週";
+                }
+                return repeatVal + "日";
+            case HOUR:
+                return repeatVal == 1 ? "時間" : repeatVal + "時間";
+            case MINUTE:
+                return repeatVal == 1 ? "分" : repeatVal + "分";
+            case SECOND:
+                return repeatVal == 1 ? "秒" : repeatVal + "秒";
+            default:
+                throw new IllegalStateException("unknown unit: " + unit);
+        }
+    }
+
+    // dai=（許可週）を「第1第3」のように連結。週サフィックスは呼び出し側で付与する
+    private String daiWeeksJoined() {
+        StringBuilder sb = new StringBuilder();
+        allowedWeeks.stream().sorted().forEach(w -> sb.append("第").append(w));
+        return sb.toString();
+    }
+
+    // allowed=true: 許可曜日（excluded=false）、allowed=false: 除外曜日（excluded=true）を
+    // 表示順（月火水木金土日）で連結する
+    private String weekdayString(boolean allowed) {
+        StringBuilder sb = new StringBuilder();
+        for (int idx : WEEKDAY_DISPLAY_ORDER) {
+            boolean flag = allowed ? !excluded[idx] : excluded[idx];
+            if (flag) sb.append(WEEKDAY_CHARS[idx]);
+        }
+        return sb.toString();
     }
 
     private static LocalDateTime advance(LocalDateTime cal, Unit unit, int val) {

@@ -1,8 +1,11 @@
 package ken5005.kreminder;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.time.LocalDateTime;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -134,5 +137,49 @@ class RepeatSpecTest {
 
         // second hit: 2026-06-18 Thu week-3 (week-2 Thu 2026-06-11 skipped)
         assertEquals(LocalDateTime.of(2026, 6, 18, 8, 0), spec.next(first));
+    }
+
+    // toJapanese() 表駆動テスト（GUI仕様v2 §6.1 対応表をそのままテストデータに）
+    @ParameterizedTest
+    @MethodSource("toJapaneseCases")
+    void toJapanese(String repeat, String expected) {
+        assertEquals(expected, RepeatSpec.parse(repeat).toJapanese());
+    }
+
+    static Stream<org.junit.jupiter.params.provider.Arguments> toJapaneseCases() {
+        return Stream.of(
+            // 基本
+            args("rep=1d", "毎日"),
+            args("rep=7d", "毎週"),
+            args("rep=1M", "毎月"),
+            args("rep=12M", "毎年"),
+            // 倍数畳み／端数
+            args("rep=14d", "毎2週"),
+            args("rep=21d", "毎3週"),
+            args("rep=13M", "毎13ヶ月"),
+            // 数値+単位
+            args("rep=3d", "毎3日"),
+            args("rep=6h", "毎6時間"),
+            args("rep=30", "毎30分"),
+            args("rep=1000m", "毎1000分"),
+            // 除外≤3→除く
+            args("rep=1d;ex=0,6", "毎日 土日除く"),
+            args("rep=1d;ex=0,1,6", "毎日 月土日除く"),
+            // bare（毎日＋曜日限定）
+            args("rep=1d;in=2", "火"),
+            args("rep=1d;in=3,6", "水土"),
+            args("rep=1d;in=0,1", "月日"),
+            args("rep=1d;in=4;dai=1,3", "第1第3木"),
+            // dai 表面化
+            args("rep=7d;dai=1,3", "毎週 第1第3週"),
+            // kuriage
+            args("rep=1M;day=25;kuriage;ex=0,6", "毎月25日(繰上) 土日除く"),
+            args("rep=1M;day=19;ex=0,6;kuriage", "毎月19日(繰上) 土日除く"),
+            args("rep=1M;ex=0,6;kuriage", "毎月(繰上) 土日除く")
+        );
+    }
+
+    private static org.junit.jupiter.params.provider.Arguments args(String repeat, String expected) {
+        return org.junit.jupiter.params.provider.Arguments.of(repeat, expected);
     }
 }
