@@ -12,7 +12,7 @@ import java.util.List;
  */
 public final class DEB {
 
-    /** 将来のPanelSink（①-b-2）が使うテキストエリアの文字数上限。今回は未使用。 */
+    /** PanelSinkがデバッグパネルのテキストエリアに保持する文字数上限。超過分は先頭から削る。 */
     public static final int PANEL_TEXT_LIMIT = 100_000;
 
     private static volatile Clock clock = Clock.systemDefaultZone();

@@ -1,8 +1,11 @@
 package ken5005.kreminder.gui;
 
+import ken5005.kreminder.debug.DEB;
 import ken5005.kreminder.debug.LogSink;
 
 import javax.swing.*;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.Document;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -43,6 +46,23 @@ public final class PanelSink implements LogSink {
         }
         if (sb.length() > 0) {
             textArea.append(sb.toString());
+            trimIfOverLimit();
+        }
+    }
+
+    /** 上限超過分を先頭から削る。行の途中で切れないよう、直近の改行までまとめて消す。 */
+    private void trimIfOverLimit() {
+        Document doc = textArea.getDocument();
+        int overflow = doc.getLength() - DEB.PANEL_TEXT_LIMIT;
+        if (overflow <= 0) return;
+        try {
+            String head = doc.getText(0, overflow);
+            int cutEnd = head.lastIndexOf('\n') + 1;
+            if (cutEnd > 0) {
+                doc.remove(0, cutEnd);
+            }
+        } catch (BadLocationException e) {
+            // 起こり得ないが、万一失敗してもログ表示自体は止めない
         }
     }
 
