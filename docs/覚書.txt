@@ -123,3 +123,7 @@ C:\Users\ken\.claude\CLAUDE.mdに以下のブロックを追加（または母�
 英語表記が一般的な専門用語（enqueue, flush, EDT, thread-safe 等）
 まで無理に和訳しない。ユーザーに見せるログ文字列も原則日本語。
 Claude Code がユーザーに向けて出す応答文（コード外の会話）も原則日本語。
+
+ここからは単なるtodo
+todo
+Claude Codeの書き込み範囲を制限する設定を調べる
