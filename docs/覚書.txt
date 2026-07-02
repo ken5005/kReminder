@@ -24,6 +24,11 @@ git br -d feature/some-new-feature
 git tag v0.6
 git push origin v0.6
 
+ブランチじゃなくmainをいじっただけの時はこうする
+git add docs/覚書.txt
+git cm "覚書.txtを変更"
+git push
+
 
 alias使わない版
 
