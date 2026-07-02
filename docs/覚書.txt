@@ -86,6 +86,16 @@ git diff HEAD
 git branch --show-current
 git status(git st)の１行目にも出てるが
 
+
+Mainを実行するなら
+gradlew shadowJar
+java -jar build\libs\kReminder-0.3.2-all.jar
+
+Main以外を実行するなら
+gradlew shadowJar
+java -cp build/libs/kReminder-0.3.2-all.jar ken5005.kreminder.gui.MainWindow
+
+
 PowerShellでは%APPDATA%は展開されない。$env:APPDATAを使う
 (エラーにならず単に%APPDATA%というそのままの文字列として扱われる。
 NotFoundエラーになってもメッセージをよく見れば気付ける)
