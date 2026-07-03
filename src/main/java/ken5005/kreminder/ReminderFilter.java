@@ -1,6 +1,7 @@
 package ken5005.kreminder;
 
 import java.time.Duration;
+import java.time.LocalDateTime;
 
 /**
  * 一覧のフィルタ判定に使う純関数群（GUI仕様v2 §3）。
@@ -60,5 +61,58 @@ public final class ReminderFilter {
         if (d < DAILY_THRESHOLD_DAYS)       return LEAD_WINDOW_DAILY;
         if (d < WEEKLY_THRESHOLD_DAYS)      return LEAD_WINDOW_WEEKLY;
         return LEAD_WINDOW_MONTHLY;
+    }
+
+    /**
+     * 一覧の表示判定（GUI仕様v2 §3.2）。上書き層（検索・全表示）→独立フィルタANDの順で短絡評価する。
+     */
+    public static boolean isVisible(Reminder r, FilterState f, LocalDateTime now) {
+        Duration remain = Duration.between(now, r.fireAt);
+
+        // 上書き層：検索非空なら他トグルを無視してコメント一致のみで判定
+        if (f.searchText() != null && !f.searchText().isEmpty()) {
+            return r.message.contains(f.searchText());
+        }
+        if (f.showAll()) return true;
+
+        // 独立フィルタAND
+        if (!bucketVisible(remain, f)) return false;
+        if (!priorityVisible(r, f)) return false;
+        if (isRepeating(r) && !f.showAllRepeat()) {
+            if (exceedsLeadWindow(r, remain)) return false;
+        }
+        return true;
+    }
+
+    // バケツ分類結果を対応トグルへマップする
+    private static boolean bucketVisible(Duration remain, FilterState f) {
+        switch (bucketOf(remain)) {
+            case 終了済: return f.showEnded();
+            case 直近:   return f.showImminent();
+            case 近日:   return f.showSoon();
+            case 先:     return f.showFar();
+            default: throw new IllegalStateException("unknown bucket");
+        }
+    }
+
+    // showLowPriority=false のとき Pri1/Pri2 のみ隠す（ordinal に頼らず == で明示比較）
+    private static boolean priorityVisible(Reminder r, FilterState f) {
+        if (f.showLowPriority()) return true;
+        return r.priority != Reminder.Priority.Pri1 && r.priority != Reminder.Priority.Pri2;
+    }
+
+    private static boolean isRepeating(Reminder r) {
+        return r.repeat != null && !r.repeat.isEmpty();
+    }
+
+    // parse失敗（不正repeat）はリードタイム制約を課さない側に倒す（原則5・表示を落とさない）
+    private static boolean exceedsLeadWindow(Reminder r, Duration remain) {
+        RepeatSpec spec;
+        try {
+            spec = RepeatSpec.parse(r.repeat);
+        } catch (RuntimeException e) {
+            return false;
+        }
+        return remain.compareTo(leadWindowOf(spec)) > 0;
     }
 }
