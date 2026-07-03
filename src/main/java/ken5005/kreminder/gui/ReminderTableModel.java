@@ -40,6 +40,11 @@ public class ReminderTableModel extends AbstractTableModel {
         fireTableDataChanged();
     }
 
+    /** RowFilter が行番号から Reminder を引くために使う（フィルタ判定は ReminderFilter.isVisible に委譲）。 */
+    public Reminder getReminderAt(int row) {
+        return reminders.get(row);
+    }
+
     @Override
     public int getRowCount() {
         return reminders.size();

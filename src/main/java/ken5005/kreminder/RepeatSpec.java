@@ -7,7 +7,8 @@ import java.util.Set;
 
 public final class RepeatSpec {
 
-    private enum Unit { MONTH, DAY, HOUR, MINUTE, SECOND }
+    // ReminderFilter（同パッケージ）から参照するため package-private
+    enum Unit { MONTH, DAY, HOUR, MINUTE, SECOND }
 
     private final String raw;
     private final int repeatVal;
@@ -35,6 +36,10 @@ public final class RepeatSpec {
         this.absDay = absDay;
         this.kuriage = kuriage;
     }
+
+    // ReminderFilter の leadWindowOf 計算用（GUI仕様v2 §3.5）
+    public int getRepeatVal() { return repeatVal; }
+    public Unit getUnit()     { return unit; }
 
     public static RepeatSpec parse(String repeat) {
         int repeatVal = 0;
