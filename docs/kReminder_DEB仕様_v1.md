@@ -1,6 +1,6 @@
 # kReminder DEB（デバッグログ基盤）仕様
 
-**位置づけ**：本書は kReminder のデバッグ／動作ログ機構「DEB」の正典。実装は `ken5005.kreminder.debug`（`DEB`/`DebFormat`/`DebWorker`/`LogSink`/`ConsoleSink`/`FileSink`）と `ken5005.kreminder.gui`（`PanelSink`/`DebugPanel`）に存在し、チャット19（①-b-1 中核）〜チャット20（①-b-2 パネル表示・①-b-3 Main 実配線・煙テスト）で完成・ship 済み。**本書はチャット22で実ソースと照合して清書したもの**（`MainWindow.java` のみ未添付＝§7 の getter 名だけ未確認）。署名・定数の一次ソースは各 `.java`。以後齟齬が出たら実コードを正とし、本書を追随させる。
+**位置づけ**：本書は kReminder のデバッグ／動作ログ機構「DEB」の正典。実装は `ken5005.kreminder.debug`（`DEB`/`DebFormat`/`DebWorker`/`LogSink`/`ConsoleSink`/`FileSink`）と `ken5005.kreminder.gui`（`PanelSink`/`DebugPanel`）に存在し、チャット19（①-b-1 中核）〜チャット20（①-b-2 パネル表示・①-b-3 Main 実配線・煙テスト）で完成・ship 済み。**本書はチャット22で実ソースと照合して清書したもの**（`MainWindow.java` はチャット23で照合済み）。署名・定数の一次ソースは各 `.java`。以後齟齬が出たら実コードを正とし、本書を追随させる。
 
 ---
 
@@ -155,8 +155,8 @@ DEB ログを GUI の `DebugPanel` 内 `JTextArea` へ流すシンク。**Swing 
 
 ## 7. Main への配線（①-b-3）
 
-- `Main.main` の `invokeLater` 内で `MainWindow` を生成し、そこから **`DebugPanel.getTextArea()`（`JTextArea` を返す）** を取り出して `new PanelSink(textArea)` を作る。`PanelSink` のコンストラクタは `JTextArea` を受ける。
-  - ※`MainWindow` が `DebugPanel` をどう公開しているか（getter 名）は `MainWindow.java` を正とする（本書照合時に未添付＝未確認）。確定しているのは `DebugPanel.getTextArea()` と `PanelSink(JTextArea)` の2点。
+- `Main.main` の `invokeLater` 内で `MainWindow` を生成し、そこから **`MainWindow.getDebugTextArea()`**（`JTextArea` を返す public メソッド。内部で private フィールド `debugPanel` の `debugPanel.getTextArea()` に委譲）を取り出して `new PanelSink(textArea)` を作る。`PanelSink` のコンストラクタは `JTextArea` を受ける。
+  - `MainWindow` は `debugPanel` そのものを返す getter は公開していない（Main が要るのは `JTextArea` だけなので不要）。Main から `debugPanel` へ直接触ることはない。
 - `DEB.init(clock, new ConsoleSink(), new FileSink(clock), panelSink)` で3シンク構成で起動。`clock` は Main の fake-clock 込みインスタンス。
 - **shutdown 経路は2つ**：ウィンドウ close（`WindowListener`）と トレイ Exit の両方で `DEB.shutdown()` を呼び、残りキューを吐き切る。
 - 既存の `HolidayLog`（`holiday.log`）は削除せず、DEB を併存で追加した（当面二重・§9）。
