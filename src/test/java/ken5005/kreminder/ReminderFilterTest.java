@@ -39,4 +39,24 @@ class ReminderFilterTest {
         RepeatSpec spec = RepeatSpec.parse(repeat);
         assertEquals(expected, ReminderFilter.leadWindowOf(spec));
     }
+
+    // GUI仕様v2 §3.2 時間バケツ境界ケース
+    static Stream<Arguments> bucketCases() {
+        return Stream.of(
+            Arguments.of(Duration.ofSeconds(-1), ReminderFilter.Bucket.終了済),
+            Arguments.of(Duration.ZERO, ReminderFilter.Bucket.終了済),
+            Arguments.of(Duration.ofSeconds(1), ReminderFilter.Bucket.直近),
+            Arguments.of(Duration.ofHours(8).minusSeconds(1), ReminderFilter.Bucket.直近),
+            Arguments.of(Duration.ofHours(8), ReminderFilter.Bucket.近日),
+            Arguments.of(Duration.ofDays(7).minusSeconds(1), ReminderFilter.Bucket.近日),
+            Arguments.of(Duration.ofDays(7), ReminderFilter.Bucket.先),
+            Arguments.of(Duration.ofDays(30), ReminderFilter.Bucket.先)
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("bucketCases")
+    void bucketOfMatchesBoundaries(Duration remain, ReminderFilter.Bucket expected) {
+        assertEquals(expected, ReminderFilter.bucketOf(remain));
+    }
 }

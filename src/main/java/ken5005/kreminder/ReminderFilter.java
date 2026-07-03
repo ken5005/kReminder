@@ -19,7 +19,24 @@ public final class ReminderFilter {
     private static final Duration LEAD_WINDOW_WEEKLY = Duration.ofDays(2);
     private static final Duration LEAD_WINDOW_MONTHLY = Duration.ofDays(3);
 
+    // 時間バケツの分類閾値（GUI仕様v2 §3.2）
+    private static final Duration BUCKET_IMMINENT_MAX = Duration.ofHours(8);
+    private static final Duration BUCKET_SOON_MAX = Duration.ofDays(7);
+
     private ReminderFilter() {
+    }
+
+    // 一覧の時間バケツ分類（表示用ではなく内部分類キー）
+    public enum Bucket { 終了済, 直近, 近日, 先 }
+
+    /**
+     * 残り時間（fireAt - now）を時間バケツへ分類する純関数（GUI仕様v2 §3.2）。
+     */
+    public static Bucket bucketOf(Duration remain) {
+        if (remain.isZero() || remain.isNegative()) return Bucket.終了済;
+        if (remain.compareTo(BUCKET_IMMINENT_MAX) < 0) return Bucket.直近;
+        if (remain.compareTo(BUCKET_SOON_MAX) < 0) return Bucket.近日;
+        return Bucket.先;
     }
 
     // repeatVal/unit から概算日数を出す。分類の閾値が30日境界なので月=30日概算で足りる（整数除算切り捨て）
