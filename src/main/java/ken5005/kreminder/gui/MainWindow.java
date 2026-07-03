@@ -1,5 +1,6 @@
 package ken5005.kreminder.gui;
 
+import ken5005.kreminder.Config;
 import ken5005.kreminder.FilterState;
 import ken5005.kreminder.Reminder;
 import ken5005.kreminder.ReminderFilter;
@@ -31,6 +32,8 @@ public class MainWindow extends JFrame {
     private final JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
     private final DebugPanel debugPanel = new DebugPanel();
     private final Clock clock;
+    // フィルタ6トグルの永続化（GUI仕様v2 §3.7）。load()はUIを組む前に呼ぶ必要がある
+    private final Config config = new Config();
 
     // 残り時間列は now 依存なので、Main の1秒 Timer から tick() で再描画させるために保持する
     private ReminderTableModel tableModel;
@@ -59,6 +62,9 @@ public class MainWindow extends JFrame {
         setLocationRelativeTo(null);
         // ×ボタンで JVM ごと終了（常駐トレイ版とは切り離した学習用 main 前提）
         setDefaultCloseOperation(EXIT_ON_CLOSE);
+
+        // buildFilterBar() でチェックボックス初期値に使うため、UIを組む前に読み込む
+        config.load();
 
         getContentPane().add(buildTopBars(),   BorderLayout.NORTH);
         getContentPane().add(buildSplitPane(), BorderLayout.CENTER);
@@ -107,17 +113,20 @@ public class MainWindow extends JFrame {
         var bar = new JToolBar();
         bar.setFloatable(false);
 
-        showEndedCheck = new JCheckBox("終了済", false);
-        showImminentCheck = new JCheckBox("直近", true);
-        showSoonCheck = new JCheckBox("近日", true);
-        showFarCheck = new JCheckBox("先", false);
-        showLowPriorityCheck = new JCheckBox("重要度低", true);
-        showAllRepeatCheck = new JCheckBox("繰り返し全表示", false);
+        showEndedCheck = new JCheckBox("終了済", config.isShowEnded());
+        showImminentCheck = new JCheckBox("直近", config.isShowImminent());
+        showSoonCheck = new JCheckBox("近日", config.isShowSoon());
+        showFarCheck = new JCheckBox("先", config.isShowFar());
+        showLowPriorityCheck = new JCheckBox("重要度低", config.isShowLowPriority());
+        showAllRepeatCheck = new JCheckBox("繰り返し全表示", config.isShowAllRepeat());
 
-        // チェック変化のたびにフィルタを再適用する。業務判断は持たず applyFilter() へ委譲するだけ
+        // チェック変化のたびにフィルタを再適用し、次回起動用に現在状態を保存する
         for (JCheckBox cb : List.of(showEndedCheck, showImminentCheck, showSoonCheck,
                 showFarCheck, showLowPriorityCheck, showAllRepeatCheck)) {
-            cb.addItemListener(e -> applyFilter());
+            cb.addItemListener(e -> {
+                applyFilter();
+                saveFilterState();
+            });
             bar.add(cb);
         }
 
@@ -207,6 +216,20 @@ public class MainWindow extends JFrame {
             showAllRepeatCheck.isSelected(),
             searchField.getText()
         );
+    }
+
+    /**
+     * チェックボックス6個の現在状態を Config へ反映して保存する（GUI仕様v2 §3.7）。
+     * 検索欄は永続化対象外（案A・仕様通り）なので触らない。
+     */
+    private void saveFilterState() {
+        config.setShowEnded(showEndedCheck.isSelected());
+        config.setShowImminent(showImminentCheck.isSelected());
+        config.setShowSoon(showSoonCheck.isSelected());
+        config.setShowFar(showFarCheck.isSelected());
+        config.setShowLowPriority(showLowPriorityCheck.isSelected());
+        config.setShowAllRepeat(showAllRepeatCheck.isSelected());
+        config.save();
     }
 
     /** 現在のフィルタ状態を RowFilter として sorter に適用し、表示行を再評価させる。 */
