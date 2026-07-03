@@ -115,4 +115,26 @@ public final class ReminderFilter {
         }
         return remain.compareTo(leadWindowOf(spec)) > 0;
     }
+
+    /**
+     * Type列（"1".."5"）の数値ソート比較器（GUI仕様v2 §2.4）。
+     * 数値化できる方を優先し、数値化できない値は数値化できた値より後ろへ寄せる。
+     * 両方数値化できない場合のみ文字列比較にフォールバックする（表示を絶対落とさない・isVisibleと同じ思想）。
+     */
+    public static int compareType(String a, String b) {
+        Integer na = tryParseInt(a);
+        Integer nb = tryParseInt(b);
+        if (na != null && nb != null) return Integer.compare(na, nb);
+        if (na != null) return -1;
+        if (nb != null) return 1;
+        return a.compareTo(b);
+    }
+
+    private static Integer tryParseInt(String s) {
+        try {
+            return Integer.parseInt(s);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
 }

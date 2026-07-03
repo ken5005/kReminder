@@ -1,14 +1,18 @@
 package ken5005.kreminder;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ReminderFilterTest {
 
@@ -149,5 +153,25 @@ class ReminderFilterTest {
     @MethodSource("isVisibleCases")
     void isVisibleMatchesDecisionOrder(String label, FilterState state, Reminder r, boolean expected) {
         assertEquals(expected, ReminderFilter.isVisible(r, state, NOW));
+    }
+
+    @Test
+    void compareTypeOrdersNumerically() {
+        assertTrue(ReminderFilter.compareType("1", "2") < 0);
+        assertTrue(ReminderFilter.compareType("5", "1") > 0);
+        assertEquals(0, ReminderFilter.compareType("3", "3"));
+    }
+
+    @Test
+    void compareTypeSortsListAscending() {
+        List<String> types = new ArrayList<>(List.of("3", "1", "5", "2", "4"));
+        types.sort(ReminderFilter::compareType);
+        assertEquals(List.of("1", "2", "3", "4", "5"), types);
+    }
+
+    @Test
+    void compareTypeSendsNonNumericAfterNumeric() {
+        assertTrue(ReminderFilter.compareType("x", "1") > 0);
+        assertTrue(ReminderFilter.compareType("1", "x") < 0);
     }
 }
