@@ -34,6 +34,8 @@ public class EditDialog extends JDialog {
     private final JTextField cmdField = new JTextField(20);
     private final JTextArea previewArea = new JTextArea(6, 20);
     private final JButton okButton = new JButton("OK");
+    // ダイアログ表示中は1秒ごとにupdatePreview()を呼び、残り時間表示をライブ更新する
+    private Timer previewTimer;
 
     public EditDialog(Frame owner, Reminder original, Clock clock) {
         super(owner, "リマインダー編集", true);
@@ -72,7 +74,22 @@ public class EditDialog extends JDialog {
         // 初期表示時点のプレビュー・OK活性を既存値に合わせておく
         updatePreview();
 
+        // 残り時間表示（「○○後」）を1秒ごとに再計算してライブ更新する
+        previewTimer = new Timer(1000, e -> updatePreview());
+        previewTimer.start();
+
         pack();
+    }
+
+    /**
+     * ダイアログを閉じる（OK・キャンセル・Esc・×ボタンいずれも最終的にここを通る）。
+     * previewTimerを止め忘れるとダイアログを閉じた後も裏で1秒ごとに動き続けてしまうため、
+     * dispose()をオーバーライドして一律停止する。
+     */
+    @Override
+    public void dispose() {
+        if (previewTimer != null) previewTimer.stop();
+        super.dispose();
     }
 
     /**
