@@ -58,6 +58,11 @@ public class ReminderTableModel extends AbstractTableModel {
         return reminders.get(row);
     }
 
+    /** 編集ダイアログでの書き戻し後、指定行の値が変わったことをJTableに通知する（GUI仕様v2 ③-d）。 */
+    public void reminderUpdatedAt(int modelRow) {
+        fireTableRowsUpdated(modelRow, modelRow);
+    }
+
     @Override
     public int getRowCount() {
         return reminders.size();

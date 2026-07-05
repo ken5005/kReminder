@@ -36,6 +36,8 @@ public class EditDialog extends JDialog {
     private final JButton okButton = new JButton("OK");
     // ダイアログ表示中は1秒ごとにupdatePreview()を呼び、残り時間表示をライブ更新する
     private Timer previewTimer;
+    // OKで閉じられたかどうか。キャンセル・Esc・×はfalseのまま（保存はMainWindow側の責務）
+    private boolean okPressed = false;
 
     public EditDialog(Frame owner, Reminder original, Clock clock) {
         super(owner, "リマインダー編集", true);
@@ -157,10 +159,36 @@ public class EditDialog extends JDialog {
     }
 
     /**
-     * OKボタンの処理。今回はダイアログを閉じるだけ。
-     * ③-dで「入力値をReminderへ書き戻してリスト置換＋保存」をここに足す差し込み口。
+     * OKボタンの処理。okPressedをtrueにしてから閉じる。
+     * 入力値のReminderへの書き戻し・保存はEditDialogでは行わず、MainWindow側の責務とする。
      */
     private void onOk() {
+        okPressed = true;
         dispose();
+    }
+
+    /** OKで閉じられたか（キャンセル・Esc・×はfalseのまま）。 */
+    public boolean isOkPressed() {
+        return okPressed;
+    }
+
+    public String getExecTimeText() {
+        return execTimeField.getText();
+    }
+
+    public String getRepeatText() {
+        return repeatField.getText();
+    }
+
+    public Reminder.Priority getSelectedPriority() {
+        return (Reminder.Priority) priorityCombo.getSelectedItem();
+    }
+
+    public String getCommentText() {
+        return commentField.getText();
+    }
+
+    public String getCmdText() {
+        return cmdField.getText();
     }
 }
