@@ -67,7 +67,10 @@ public class Main {
         HolidayLog.log(clock, "[Main] loadInitial: " + initial.status());
 
         SwingUtilities.invokeLater(() -> {
-            MainWindow window = new MainWindow(clock);
+            // ③-d: リスト一本化。ここでload()した同一インスタンスをMainWindow/checkReminders双方に渡す
+            // （以前はMainWindowが自前でload()しており、編集や発火状態の書き戻し先が食い違っていた）
+            List<Reminder> reminders = ReminderStore.load();
+            MainWindow window = new MainWindow(clock, reminders);
             PanelSink panelSink = new PanelSink(window.getDebugTextArea());
             DEB.init(clock, new ConsoleSink(), new FileSink(clock), panelSink);
             window.addWindowListener(new WindowAdapter() {
@@ -79,8 +82,6 @@ public class Main {
             window.setVisible(true);
 
             DEB.pr(fakeClockUsedFinal ? "起動: kReminder（fake-clock使用）" : "起動: kReminder");
-
-            List<Reminder> reminders = ReminderStore.load();
             DEB.pr("reminders読込: " + reminders.size() + "件");
             DEB.pr("祝日loadInitial: " + initial.status());
 

@@ -35,14 +35,32 @@ public class ReminderTableModel extends AbstractTableModel {
         this.clock = clock;
     }
 
-    /** 1秒ごとに Main の Timer から呼ばれる。残り時間列は now 依存なので再描画で追従させる。 */
+    /**
+     * 1秒ごとに Main の Timer から呼ばれる。残り時間列は now 依存なので再描画で追従させる。
+     * fireTableDataChanged() ではなく fireTableRowsUpdated で「値だけ更新」と通知する。
+     * fireTableDataChanged はモデル全体差し替え相当の通知になり、JTable が選択行を破棄してしまう
+     * （毎秒選択が解除され「編集」ボタンが常に未選択扱いになるバグの原因だった）。
+     *
+     * 不変条件: tick() は値の更新のみを行い、行の追加・削除・並び替えは一切しない。
+     * 行数が変わらないからこそ fireTableRowsUpdated(0, getRowCount()-1) で範囲を固定してよい。
+     * 将来 tick() 内で行を増減させる処理（例: 発火済みリマインダーの自動削除）を足す場合は、
+     * その増減側で fireTableRowsInserted/Deleted 等の専用通知を出すこと。tick() の役割を
+     * 値更新に限定したまま、行数変化の通知と混同しないこと。
+     */
     public void tick() {
-        fireTableDataChanged();
+        if (getRowCount() > 0) {
+            fireTableRowsUpdated(0, getRowCount() - 1);
+        }
     }
 
     /** RowFilter が行番号から Reminder を引くために使う（フィルタ判定は ReminderFilter.isVisible に委譲）。 */
     public Reminder getReminderAt(int row) {
         return reminders.get(row);
+    }
+
+    /** 編集ダイアログでの書き戻し後、指定行の値が変わったことをJTableに通知する（GUI仕様v2 ③-d）。 */
+    public void reminderUpdatedAt(int modelRow) {
+        fireTableRowsUpdated(modelRow, modelRow);
     }
 
     @Override

@@ -1,6 +1,7 @@
 package ken5005.kreminder.gui;
 
 import ken5005.kreminder.Config;
+import ken5005.kreminder.EditFormLogic;
 import ken5005.kreminder.FilterState;
 import ken5005.kreminder.Reminder;
 import ken5005.kreminder.ReminderFilter;
@@ -13,6 +14,8 @@ import javax.swing.event.DocumentListener;
 import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.awt.event.HierarchyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Comparator;
@@ -34,6 +37,9 @@ public class MainWindow extends JFrame {
     private final Clock clock;
     // フィルタ6トグルの永続化（GUI仕様v2 §3.7）。load()はUIを組む前に呼ぶ必要がある
     private final Config config = new Config();
+    // Main が起動時にload()した同一インスタンス（③-d・リスト一本化）。
+    // MainWindowが自前でload()すると別インスタンスになり、編集や発火状態の書き戻し先が食い違う
+    private final List<Reminder> reminders;
 
     // 残り時間列は now 依存なので、Main の1秒 Timer から tick() で再描画させるために保持する
     private ReminderTableModel tableModel;
@@ -54,9 +60,10 @@ public class MainWindow extends JFrame {
     private int savedDividerLocation = -1; // 未設定＝初回はDEFAULT_DEBUG_DIVIDER_RATIOを使う
     private boolean initialCollapseApplied = false;
 
-    public MainWindow(Clock clock) {
+    public MainWindow(Clock clock, List<Reminder> reminders) {
         super("kReminder");
         this.clock = clock;
+        this.reminders = reminders;
         setSize(800, 500);
         // 画面中央に配置（null = 自画面基準）
         setLocationRelativeTo(null);
@@ -92,6 +99,8 @@ public class MainWindow extends JFrame {
             var btn = new JButton(name);
             if (name.equals("デバッグログ")) {
                 btn.addActionListener(e -> toggleDebugPanel());
+            } else if (name.equals("編集")) {
+                btn.addActionListener(e -> onEditButton());
             } else {
                 // 各ボタンの ActionListener はステータスバー更新＋DEBログ出力のみ（業務ロジックなし）
                 btn.addActionListener(e -> {
@@ -178,9 +187,45 @@ public class MainWindow extends JFrame {
         debugPanelOpen = !debugPanelOpen;
     }
 
-    /** テーブルを組み立てる。読込失敗時は空リストで起動（ReminderStore.load() が保証）。 */
+    /**
+     * 「編集」ボタンの導線（GUI仕様v2 ③-b/③-d）。選択行のReminderをEditDialogに渡して開き、
+     * OKで閉じられた場合のみ入力値をoriginalへ書き戻して保存・再描画する。
+     * 未選択（viewRow==-1）ならダイアログは開かず、ステータスバーで案内するだけにする。
+     */
+    private void onEditButton() {
+        int viewRow = table.getSelectedRow();
+        if (viewRow == -1) {
+            statusBar.setText("編集する行を選択してください");
+            return;
+        }
+        // ソート/フィルタ後のビュー行 → モデル行へ変換してからReminderを引く
+        int modelRow = sorter.convertRowIndexToModel(viewRow);
+        Reminder original = tableModel.getReminderAt(modelRow);
+
+        var dialog = new EditDialog(this, original, clock);
+        dialog.setLocationRelativeTo(this);
+        dialog.setVisible(true); // モーダルなのでダイアログが閉じるまでここで待つ
+
+        if (!dialog.isOkPressed()) return; // キャンセル・Esc・×は何もしない
+
+        // OK活性で保証済みだが、書き戻し前に念のため再パースして確認する（防御的）
+        var parsed = EditFormLogic.parseExecTime(dialog.getExecTimeText());
+        if (parsed.isEmpty()) return;
+
+        // 案A：入力値をoriginalへ上書き。案(あ)：編集したら発火済みフラグを一律リセットする
+        original.fireAt = parsed.get();
+        original.repeat = dialog.getRepeatText();
+        original.priority = dialog.getSelectedPriority();
+        original.message = dialog.getCommentText();
+        original.action = dialog.getCmdText();
+        original.noticed = false;
+
+        ReminderStore.save(reminders); // 一本化した同一リストを全書き
+        tableModel.reminderUpdatedAt(modelRow);
+    }
+
+    /** テーブルを組み立てる。reminders はコンストラクタで受け取った同一インスタンス（③-d）。 */
     private JScrollPane buildTable() {
-        var reminders = ReminderStore.load();
         tableModel = new ReminderTableModel(reminders, clock);
         table = new JTable(tableModel);
 
@@ -196,6 +241,17 @@ public class MainWindow extends JFrame {
         sorter.setComparator(0, (Comparator<String>) ReminderFilter::compareType);
         // 残り時間列は now 依存で毎秒変わるため、ヘッダクリックでのソートを無効化する
         sorter.setSortable(3, false);
+
+        // ダブルクリックで「編集」ボタンと同じ導線を開く。ダブルクリックした行はJTableの既定挙動で
+        // 選択済みになっているため、onEditButton() 側の getSelectedRow() でそのまま拾える
+        table.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    onEditButton();
+                }
+            }
+        });
 
         // JScrollPane に載せないとヘッダ（列名）が表示されない — これは JTable の仕様
         return new JScrollPane(table);
