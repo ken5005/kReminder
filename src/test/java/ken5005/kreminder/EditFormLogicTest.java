@@ -57,6 +57,25 @@ class EditFormLogicTest {
         assertEquals(expected, EditFormLogic.isValidRep(input));
     }
 
+    // isTotallyValid: execTime・repのvalid/invalidの組み合わせを表駆動で確認
+    static Stream<Arguments> isTotallyValidCases() {
+        return Stream.of(
+            Arguments.of("2026-06-24 15:30:00", "", true),              // execTime正 × rep空＝単発
+            Arguments.of("2026-06-24 15:30:00", "rep=1d;ex=0,6", true), // execTime正 × rep正常
+            Arguments.of("2026-06-24 15:30:00", "rep=1d;foo=3", false), // execTime正 × rep不正
+            Arguments.of("not-a-date", "", false),                       // execTime不正 × rep空
+            Arguments.of("not-a-date", "rep=1d;foo=3", false),          // execTime不正 × rep不正
+            Arguments.of("", "", false),                                 // execTime空 × 任意
+            Arguments.of(null, "rep=1d", false)                          // execTime null × 任意
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("isTotallyValidCases")
+    void isTotallyValid(String execTimeStr, String repStr, boolean expected) {
+        assertEquals(expected, EditFormLogic.isTotallyValid(execTimeStr, repStr));
+    }
+
     @Test
     void buildPreview_execTimeInvalid_returnsErrorLine() {
         String result = EditFormLogic.buildPreview("not-a-date", "", LocalDateTime.of(2026, 6, 24, 10, 0), HolidayCheck.NONE);

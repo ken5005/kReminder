@@ -62,6 +62,13 @@ public final class EditFormLogic {
     }
 
     /**
+     * OKボタンの活性判定。実行時刻・繰り返しの両方がvalidならtrue（Cmdは判定に含めない＝常に可）。
+     */
+    public static boolean isTotallyValid(String execTimeStr, String repStr) {
+        return parseExecTime(execTimeStr).isPresent() && isValidRep(repStr);
+    }
+
+    /**
      * 実行時刻・繰り返しの入力からプレビュー文字列（複数行）を組み立てる。
      * now・holiday は外部注入（テストでは HolidayCheck.NONE を渡す）。
      */
