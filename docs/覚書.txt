@@ -17,10 +17,10 @@ git aa
 git cm "v0.6: areya koreya wo tuika"
 git push -u origin feature/some-new-feature
 gh pr create --fill
-gh pr merge --merge
+gh pr merge --merge --delete-branch
 git sw main
 git pull
-git br -d feature/some-new-feature
+git br -d feature/some-new-feature # mergeに--delete-branch付けてるなら不要
 git tag v0.6
 git push origin v0.6
 
@@ -43,14 +43,14 @@ git push -u origin feature/some-new-feature
 ↑なお、ブランチじゃなくmainをただ上げる場合は「git push origin main」とする
 gh pr create --fill
 ↑PR作成（コミット内容で自動記入）
-gh pr merge --merge
+gh pr merge --merge --delete-branch
 ↑PRをmainにマージ（マージコミット型）
 git switch main
 ↑mainに戻る
 git pull
 ↑マージ結果をローカルmainに取り込む
 git branch -d feature/some-new-feature
-↑用済みブランチを削除
+↑用済みブランチを削除( # mergeに--delete-branch付けてるなら不要)
 仕上げにタグ打つなら:
 git tag v0.6
 git push origin v0.6
@@ -141,3 +141,12 @@ DEB.pr_()
 あなたが示したいくつかの選択肢に対し、僕が回答せずに作業を先に進める指示をしたときは大抵うっかりなので、
 指示に乗らずちゃんと立ち止まり「まだこの選択肢に答えてないけど？」と確認する事。
 ただし「全部それでOK」等、指示が明確ならそれに従って。
+
+git push -u origin feature/edit-dialog
+gh pr create --fill
+gh pr merge --merge --delete-branch
+git sw main
+git pull
+git br -d feature/edit-dialog
+git tag v0.6.0
+git push origin v0.6.0
