@@ -13,6 +13,8 @@ import javax.swing.event.DocumentListener;
 import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.awt.event.HierarchyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Comparator;
@@ -92,6 +94,8 @@ public class MainWindow extends JFrame {
             var btn = new JButton(name);
             if (name.equals("デバッグログ")) {
                 btn.addActionListener(e -> toggleDebugPanel());
+            } else if (name.equals("編集")) {
+                btn.addActionListener(e -> onEditButton());
             } else {
                 // 各ボタンの ActionListener はステータスバー更新＋DEBログ出力のみ（業務ロジックなし）
                 btn.addActionListener(e -> {
@@ -178,6 +182,25 @@ public class MainWindow extends JFrame {
         debugPanelOpen = !debugPanelOpen;
     }
 
+    /**
+     * 「編集」ボタンの導線（GUI仕様v2 ③-b）。選択行のReminderをEditDialogに渡して開く。
+     * 未選択（viewRow==-1）ならダイアログは開かず、ステータスバーで案内するだけにする。
+     */
+    private void onEditButton() {
+        int viewRow = table.getSelectedRow();
+        if (viewRow == -1) {
+            statusBar.setText("編集する行を選択してください");
+            return;
+        }
+        // ソート/フィルタ後のビュー行 → モデル行へ変換してからReminderを引く
+        int modelRow = sorter.convertRowIndexToModel(viewRow);
+        Reminder reminder = tableModel.getReminderAt(modelRow);
+
+        var dialog = new EditDialog(this, reminder);
+        dialog.setLocationRelativeTo(this);
+        dialog.setVisible(true);
+    }
+
     /** テーブルを組み立てる。読込失敗時は空リストで起動（ReminderStore.load() が保証）。 */
     private JScrollPane buildTable() {
         var reminders = ReminderStore.load();
@@ -196,6 +219,17 @@ public class MainWindow extends JFrame {
         sorter.setComparator(0, (Comparator<String>) ReminderFilter::compareType);
         // 残り時間列は now 依存で毎秒変わるため、ヘッダクリックでのソートを無効化する
         sorter.setSortable(3, false);
+
+        // ダブルクリックで「編集」ボタンと同じ導線を開く。ダブルクリックした行はJTableの既定挙動で
+        // 選択済みになっているため、onEditButton() 側の getSelectedRow() でそのまま拾える
+        table.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    onEditButton();
+                }
+            }
+        });
 
         // JScrollPane に載せないとヘッダ（列名）が表示されない — これは JTable の仕様
         return new JScrollPane(table);
