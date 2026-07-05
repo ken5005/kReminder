@@ -1,22 +1,30 @@
 package ken5005.kreminder.gui;
 
+import ken5005.kreminder.EditFormLogic;
+import ken5005.kreminder.HolidayCheck;
 import ken5005.kreminder.Reminder;
 
 import javax.swing.*;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import java.awt.*;
 import java.awt.event.KeyEvent;
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 /**
- * リマインダー編集ダイアログ（GUI仕様v2 ③-b）。
- * 今回は器のみ：既存値の流し込みと開閉だけを行う。
- * プレビュー配線（EditFormLogic.buildPreview）と保存書き戻しは③-c/③-dで追加する。
+ * リマインダー編集ダイアログ（GUI仕様v2 ③-b/③-c）。
+ * 実行時刻・繰り返しの入力から EditFormLogic でプレビューとOK活性を毎打鍵更新する。
+ * 保存書き戻し（③-d）はまだ行わない。
  */
 public class EditDialog extends JDialog {
 
     // EditFormLogic と同じ書式（共通化は無理にしない＝重複を許容）
     private static final DateTimeFormatter FIRE_AT_FORMAT =
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    private final Clock clock;
 
     // ③-c/③-dから参照するため各入力欄をフィールドとして保持する
     private final JTextField execTimeField = new JTextField(20);
@@ -25,9 +33,11 @@ public class EditDialog extends JDialog {
     private final JTextField commentField = new JTextField(20);
     private final JTextField cmdField = new JTextField(20);
     private final JTextArea previewArea = new JTextArea(6, 20);
+    private final JButton okButton = new JButton("OK");
 
-    public EditDialog(Frame owner, Reminder original) {
+    public EditDialog(Frame owner, Reminder original, Clock clock) {
         super(owner, "リマインダー編集", true);
+        this.clock = clock;
 
         // 選択行の既存値を各欄へ流し込む。null許容フィールドは空文字にフォールバック
         execTimeField.setText(original.fireAt == null ? "" : original.fireAt.format(FIRE_AT_FORMAT));
@@ -36,9 +46,19 @@ public class EditDialog extends JDialog {
         commentField.setText(original.message == null ? "" : original.message);
         cmdField.setText(original.action == null ? "" : original.action);
 
-        // プレビューは③-cで毎打鍵配線するまでは静的な仮テキストにしておく
         previewArea.setEditable(false);
-        previewArea.setText("（プレビューは③-cで配線）");
+        // 横スクロールを出さず、長い行（Usageヘルプ等）は折り返し表示にする
+        previewArea.setLineWrap(true);
+        previewArea.setWrapStyleWord(true);
+
+        // プレビューに影響するのは実行時刻・繰り返しの2欄だけ（優先度/コメント/Cmdは不要）
+        DocumentListener previewUpdater = new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent e) { updatePreview(); }
+            @Override public void removeUpdate(DocumentEvent e) { updatePreview(); }
+            @Override public void changedUpdate(DocumentEvent e) { updatePreview(); }
+        };
+        execTimeField.getDocument().addDocumentListener(previewUpdater);
+        repeatField.getDocument().addDocumentListener(previewUpdater);
 
         getContentPane().add(buildForm(), BorderLayout.CENTER);
         getContentPane().add(buildButtons(), BorderLayout.SOUTH);
@@ -49,7 +69,28 @@ public class EditDialog extends JDialog {
             KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
             JComponent.WHEN_IN_FOCUSED_WINDOW);
 
+        // 初期表示時点のプレビュー・OK活性を既存値に合わせておく
+        updatePreview();
+
         pack();
+    }
+
+    /**
+     * 実行時刻・繰り返しの現在値からプレビューを再計算し、OKボタンの活性も合わせて更新する。
+     * 内容が変わったときだけ setText＋setCaretPosition(0) で先頭固定する。内容が同じなら
+     * 何もしない＝ユーザーがスクロール中の位置を保つ（③-c-3の毎秒再計算での引き戻し防止）。
+     */
+    private void updatePreview() {
+        String preview = EditFormLogic.buildPreview(
+            execTimeField.getText(),
+            repeatField.getText(),
+            LocalDateTime.now(clock),
+            HolidayCheck.NONE);
+        if (!preview.equals(previewArea.getText())) {
+            previewArea.setText(preview);
+            previewArea.setCaretPosition(0);
+        }
+        okButton.setEnabled(EditFormLogic.isTotallyValid(execTimeField.getText(), repeatField.getText()));
     }
 
     /** ラベル＋入力欄をGridBagLayoutで縦に並べ、最終行にプレビュー欄を置く。 */
@@ -68,7 +109,10 @@ public class EditDialog extends JDialog {
         gbc.gridx = 0;
         gbc.gridy = 5;
         gbc.gridwidth = 2;
-        panel.add(new JScrollPane(previewArea), gbc);
+        var previewScroll = new JScrollPane(previewArea,
+            JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+            JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        panel.add(previewScroll, gbc);
 
         return panel;
     }
@@ -87,7 +131,6 @@ public class EditDialog extends JDialog {
 
     private JPanel buildButtons() {
         var panel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        var okButton = new JButton("OK");
         var cancelButton = new JButton("キャンセル");
         okButton.addActionListener(e -> onOk());
         cancelButton.addActionListener(e -> dispose());

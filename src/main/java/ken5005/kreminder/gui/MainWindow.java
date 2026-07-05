@@ -196,7 +196,7 @@ public class MainWindow extends JFrame {
         int modelRow = sorter.convertRowIndexToModel(viewRow);
         Reminder reminder = tableModel.getReminderAt(modelRow);
 
-        var dialog = new EditDialog(this, reminder);
+        var dialog = new EditDialog(this, reminder, clock);
         dialog.setLocationRelativeTo(this);
         dialog.setVisible(true);
     }
