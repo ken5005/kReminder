@@ -40,6 +40,8 @@ public class MainWindow extends JFrame {
     // Main が起動時にload()した同一インスタンス（③-d・リスト一本化）。
     // MainWindowが自前でload()すると別インスタンスになり、編集や発火状態の書き戻し先が食い違う
     private final List<Reminder> reminders;
+    // Main と同一のstoreインスタンス。編集保存もMain側のcheckRemindersと同じPathへ書く
+    private final ReminderStore store;
 
     // 残り時間列は now 依存なので、Main の1秒 Timer から tick() で再描画させるために保持する
     private ReminderTableModel tableModel;
@@ -60,10 +62,11 @@ public class MainWindow extends JFrame {
     private int savedDividerLocation = -1; // 未設定＝初回はDEFAULT_DEBUG_DIVIDER_RATIOを使う
     private boolean initialCollapseApplied = false;
 
-    public MainWindow(Clock clock, List<Reminder> reminders) {
+    public MainWindow(Clock clock, List<Reminder> reminders, ReminderStore store) {
         super("kReminder");
         this.clock = clock;
         this.reminders = reminders;
+        this.store = store;
         setSize(800, 500);
         // 画面中央に配置（null = 自画面基準）
         setLocationRelativeTo(null);
@@ -220,7 +223,7 @@ public class MainWindow extends JFrame {
         original.action = dialog.getCmdText();
         original.noticed = false;
 
-        ReminderStore.save(reminders); // 一本化した同一リストを全書き
+        store.save(reminders); // 一本化した同一リスト・同一storeで全書き
         tableModel.reminderUpdatedAt(modelRow);
     }
 
