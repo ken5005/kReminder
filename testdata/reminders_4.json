@@ -1,0 +1,34 @@
+[
+  {
+    "fireAt": "2026-07-08T10:00:00",
+    "message": "日後の段（6日後になるはず）",
+    "priority": "Pri3",
+    "action": "",
+    "noticed": false,
+    "repeat": ""
+  },
+  {
+    "fireAt": "2026-07-04T13:00:00",
+    "message": "日時間後の段（2日3時間後になるはず）",
+    "priority": "Pri3",
+    "action": "",
+    "noticed": false,
+    "repeat": "rep=1M;day=25;kuriage;ex=0,6"
+  },
+  {
+    "fireAt": "2026-07-02T11:30:00",
+    "message": "時間分後の段（1時間30分後になるはず・秒ごとに減っていく）",
+    "priority": "Pri2",
+    "action": "",
+    "noticed": false,
+    "repeat": ""
+  },
+  {
+    "fireAt": "2026-07-02T10:03:20",
+    "message": "分秒後の段（3分20秒後になるはず・毎秒更新を目視）",
+    "priority": "Pri4",
+    "action": "",
+    "noticed": true,
+    "repeat": "rep=1d;kuriage"
+  }
+]

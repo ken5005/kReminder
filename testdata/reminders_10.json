@@ -1,0 +1,82 @@
+[
+  {
+    "fireAt": "2026-07-10T19:53:15",
+    "message": "testです",
+    "priority": "Pri3",
+    "action": "",
+    "noticed": false,
+    "repeat": ""
+  },
+  {
+    "fireAt": "2026-07-06T07:30:00",
+    "message": "燃えるゴミを出す",
+    "priority": "Pri4",
+    "action": "",
+    "noticed": false,
+    "repeat": "rep=1d;ex=0,6"
+  },
+  {
+    "fireAt": "2026-07-19T09:00:00",
+    "message": "家賃振込",
+    "priority": "Pri2",
+    "action": "",
+    "noticed": false,
+    "repeat": "rep=1M;day=19;ex=0,6;kuriage"
+  },
+  {
+    "fireAt": "2026-07-25T15:00:00",
+    "message": "納会・ガソリン満タン",
+    "priority": "Pri2",
+    "action": "",
+    "noticed": false,
+    "repeat": "rep=1M;day=25;kuriage;ex=0,6"
+  },
+  {
+    "fireAt": "2026-07-16T07:30:00",
+    "message": "燃えないゴミ（第1・第3木曜）",
+    "priority": "Pri4",
+    "action": "",
+    "noticed": false,
+    "repeat": "rep=1d;in=4;dai=1,3"
+  },
+  {
+    "fireAt": "2026-07-05T22:00:00",
+    "message": "週次バックアップ",
+    "priority": "Pri3",
+    "action": "notepad.exe",
+    "noticed": false,
+    "repeat": "rep=7d"
+  },
+  {
+    "fireAt": "2026-06-15T12:00:00",
+    "message": "過去の通知済みタスク（表示テスト用）",
+    "priority": "Pri5",
+    "action": "",
+    "noticed": true,
+    "repeat": ""
+  },
+  {
+    "fireAt": "2026-08-01T10:00:00",
+    "message": "これは列幅の確認用にわざと長めのメッセージを入れておくダミー項目です。折り返しや省略の挙動を見るため。",
+    "priority": "Pri3",
+    "action": "",
+    "noticed": false,
+    "repeat": ""
+  },
+  {
+    "fireAt": "2026-07-04T18:00:00",
+    "message": "アクション起動テスト（メモ帳）",
+    "priority": "Pri1",
+    "action": "notepad.exe",
+    "noticed": true,
+    "repeat": ""
+  },
+  {
+    "fireAt": "2026-07-05T20:00:00",
+    "message": "毎日の水やり",
+    "priority": "Pri5",
+    "action": "",
+    "noticed": false,
+    "repeat": "rep=1d"
+  }
+]
