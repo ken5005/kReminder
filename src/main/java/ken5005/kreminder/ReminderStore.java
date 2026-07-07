@@ -48,6 +48,10 @@ public class ReminderStore {
         this.path = path;
     }
 
+    public Path getPath() {
+        return path;
+    }
+
     public List<Reminder> load() {
         if (!Files.exists(path)) return new ArrayList<>();
         try (Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {

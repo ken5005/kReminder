@@ -15,7 +15,7 @@ public class DataPathResolver {
         Path path = Path.of(dataOpt);
         if (!path.isAbsolute()) {
             throw new IllegalArgumentException(
-                "kReminder: --data must be an absolute path: \"" + dataOpt + "\"");
+                "--data must be an absolute path: \"" + dataOpt + "\"");
         }
         return path;
     }

@@ -17,6 +17,8 @@ import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -42,6 +44,7 @@ public class Main {
 
     public static void main(String[] args) {
         boolean fakeClockUsed = false;
+        String dataOpt = null;
         for (String arg : args) {
             if (arg.startsWith("--fake-now=")) {
                 String value = arg.substring("--fake-now=".length());
@@ -55,9 +58,27 @@ public class Main {
                     System.err.println("kReminder: invalid --fake-now value: \"" + value + "\"  (expected YYYY-MM-DDTHH:mm:ss)");
                     System.exit(1);
                 }
+            } else if (arg.startsWith("--data=")) {
+                dataOpt = arg.substring("--data=".length());
             }
         }
         final boolean fakeClockUsedFinal = fakeClockUsed;
+
+        // --data: 絶対パスのみ許可し、かつ指定時はファイル存在必須（新規作成で本来のreminders.jsonと
+        // 混同するのを防ぐ）。相対パス・未存在パスはfake-nowの不正値と同じくstderr+exit(1)
+        try {
+            Path dataPath = DataPathResolver.resolve(dataOpt);
+            if (dataOpt != null && !Files.exists(dataPath)) {
+                System.err.println("kReminder: --data path does not exist: \"" + dataPath + "\"");
+                System.exit(1);
+                return;
+            }
+            store = new ReminderStore(dataPath);
+        } catch (IllegalArgumentException e) {
+            System.err.println("kReminder: " + e.getMessage());
+            System.exit(1);
+            return;
+        }
 
         // Load override file once — holds add/remove sets for the session
         loadedOverride = HolidayOverride.load(HolidayCheck.NONE);
@@ -73,8 +94,8 @@ public class Main {
             // ③-d: リスト一本化。ここでload()した同一インスタンスをMainWindow/checkReminders双方に渡す
             // （以前はMainWindowが自前でload()しており、編集や発火状態の書き戻し先が食い違っていた）
             // storeも同様に単一インスタンスをMainWindow/checkReminders双方に渡し、
-            // 読み書き先（Path）を一致させる（--data注入時の食い違い防止）
-            store = new ReminderStore();
+            // 読み書き先（Path）を一致させる（--data注入時の食い違い防止）。
+            // store自体はmain()冒頭で--data解決済みでここではload()するだけ
             List<Reminder> reminders = store.load();
             MainWindow window = new MainWindow(clock, reminders, store);
             PanelSink panelSink = new PanelSink(window.getDebugTextArea());
@@ -88,6 +109,7 @@ public class Main {
             window.setVisible(true);
 
             DEB.pr(fakeClockUsedFinal ? "起動: kReminder（fake-clock使用）" : "起動: kReminder");
+            DEB.pr("reminders読込先: " + store.getPath());
             DEB.pr("reminders読込: " + reminders.size() + "件");
             DEB.pr("祝日loadInitial: " + initial.status());
 
