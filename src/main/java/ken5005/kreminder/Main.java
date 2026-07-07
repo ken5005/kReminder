@@ -37,6 +37,9 @@ public class Main {
     private static TrayIcon trayIcon;
     private static HolidayStatus lastTrayStatus;
 
+    // reminders.json の読み書き先。step3で--dataによる注入に対応する（現時点はデフォルト固定）
+    private static ReminderStore store;
+
     public static void main(String[] args) {
         boolean fakeClockUsed = false;
         for (String arg : args) {
@@ -69,8 +72,11 @@ public class Main {
         SwingUtilities.invokeLater(() -> {
             // ③-d: リスト一本化。ここでload()した同一インスタンスをMainWindow/checkReminders双方に渡す
             // （以前はMainWindowが自前でload()しており、編集や発火状態の書き戻し先が食い違っていた）
-            List<Reminder> reminders = ReminderStore.load();
-            MainWindow window = new MainWindow(clock, reminders);
+            // storeも同様に単一インスタンスをMainWindow/checkReminders双方に渡し、
+            // 読み書き先（Path）を一致させる（--data注入時の食い違い防止）
+            store = new ReminderStore();
+            List<Reminder> reminders = store.load();
+            MainWindow window = new MainWindow(clock, reminders, store);
             PanelSink panelSink = new PanelSink(window.getDebugTextArea());
             DEB.init(clock, new ConsoleSink(), new FileSink(clock), panelSink);
             window.addWindowListener(new WindowAdapter() {
@@ -131,7 +137,7 @@ public class Main {
                 reschedule(r, now);
             }
         }
-        if (changed) ReminderStore.save(reminders);
+        if (changed) store.save(reminders);
     }
 
     private static void reschedule(Reminder r, LocalDateTime now) {

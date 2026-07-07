@@ -19,8 +19,6 @@ import java.util.List;
 
 public class ReminderStore {
 
-    private static final String FILE_NAME = "reminders.json";
-
     private static final Gson GSON = new GsonBuilder()
         .setPrettyPrinting()
         .disableHtmlEscaping()
@@ -38,16 +36,19 @@ public class ReminderStore {
         })
         .create();
 
-    static Path getDataPath() {
-        String appData = System.getenv("APPDATA");
-        Path dir = appData != null
-            ? Path.of(appData, "kReminder")
-            : Path.of(System.getProperty("user.home"), "kReminder");
-        return dir.resolve(FILE_NAME);
+    private final Path path;
+
+    /** 従来どおりのデフォルト先（%APPDATA%\kReminder\reminders.json 等）を使う。 */
+    public ReminderStore() {
+        this(DataPathResolver.defaultPath());
     }
 
-    public static List<Reminder> load() {
-        Path path = getDataPath();
+    /** --data 等で明示指定された Path を読み書き先にする。 */
+    public ReminderStore(Path path) {
+        this.path = path;
+    }
+
+    public List<Reminder> load() {
         if (!Files.exists(path)) return new ArrayList<>();
         try (Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
             Type listType = new TypeToken<List<Reminder>>() {}.getType();
@@ -59,8 +60,7 @@ public class ReminderStore {
         }
     }
 
-    public static void save(List<Reminder> reminders) {
-        Path path = getDataPath();
+    public void save(List<Reminder> reminders) {
         try {
             Files.createDirectories(path.getParent());
             try (Writer writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
