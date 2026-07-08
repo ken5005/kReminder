@@ -23,6 +23,8 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -41,6 +43,15 @@ public class Main {
 
     // reminders.json の読み書き先。step3で--dataによる注入に対応する（現時点はデフォルト固定）
     private static ReminderStore store;
+
+    // ポップアップ同時表示の上限。全処理が EDT 一本なのでカウンタの同期は不要
+    private static final int MAX_POPUPS = 10;
+    // 位置ずらしの1回あたりオフセット(px)。動作確認時に折り返しを見るため値を変えられるよう定数化
+    private static final int POPUP_OFFSET = 105;
+
+    private static final Deque<Reminder> popupQueue = new ArrayDeque<>();
+    private static int openPopupCount = 0;
+    private static Point nextPopupLocation; // null = 次の1枚は画面中央に配置
 
     public static void main(String[] args) {
         boolean fakeClockUsed = false;
@@ -155,11 +166,23 @@ public class Main {
             if (!r.noticed && r.fireAt != null && !r.fireAt.isAfter(now)) {
                 r.noticed = true;
                 changed = true;
-                showPopup(r);
+                popupQueue.add(r);
                 reschedule(r, now);
             }
         }
-        if (changed) store.save(reminders);
+        if (changed) {
+            pumpPopups();
+            store.save(reminders);
+        }
+    }
+
+    /** 待ち行列から枚数上限まで補充してポップアップを開く。ポップアップが閉じた側からも呼ばれる。 */
+    private static void pumpPopups() {
+        while (openPopupCount < MAX_POPUPS && !popupQueue.isEmpty()) {
+            Reminder r = popupQueue.poll();
+            openPopupCount++;
+            showPopup(r);
+        }
     }
 
     private static void reschedule(Reminder r, LocalDateTime now) {
@@ -212,7 +235,9 @@ public class Main {
     }
 
     private static void showPopup(Reminder r) {
-        JDialog dialog = new JDialog((Frame) null, "kReminder", true);
+        // 非モーダル化: モーダルのままだと setVisible(true) が EDT をブロックし、
+        // ポップアップ表示中に1秒 Timer（残り時間表示・編集）が全部止まってしまう
+        JDialog dialog = new JDialog((Frame) null, "kReminder", false);
         dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
         dialog.setLayout(new BorderLayout(10, 10));
 
@@ -229,9 +254,46 @@ public class Main {
 
         dialog.pack();
         dialog.setMinimumSize(new Dimension(240, 100));
-        dialog.setLocationRelativeTo(null);
+        placePopup(dialog);
         dialog.setAlwaysOnTop(true);
+
+        // OK（dispose()）・×（DISPOSE_ON_CLOSE）のどちらで閉じても windowClosed が発火するので、
+        // 枚数カウンタの後処理をここに一本化する
+        dialog.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosed(WindowEvent e) {
+                openPopupCount--;
+                if (openPopupCount == 0) nextPopupLocation = null; // 全部閉じたら次の1枚目はまた中央から
+                pumpPopups();
+            }
+        });
+
         dialog.setVisible(true);
+    }
+
+    /**
+     * ポップアップの表示位置を決めて dialog に設定する。
+     * 1枚目（nextPopupLocation未設定）は画面中央。以降は前回位置から右下に POPUP_OFFSET ずつずらし、
+     * 使用可能領域（タスクバー等を除く）をはみ出す場合は左上に折り返す。
+     */
+    private static void placePopup(JDialog dialog) {
+        Rectangle screen = GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds();
+        Point location;
+        if (nextPopupLocation == null) {
+            location = new Point(
+                screen.x + (screen.width - dialog.getWidth()) / 2,
+                screen.y + (screen.height - dialog.getHeight()) / 2
+            );
+        } else {
+            location = nextPopupLocation;
+            boolean overflows = location.x + dialog.getWidth() > screen.x + screen.width
+                || location.y + dialog.getHeight() > screen.y + screen.height;
+            if (overflows) {
+                location = new Point(screen.x, screen.y);
+            }
+        }
+        dialog.setLocation(location);
+        nextPopupLocation = new Point(location.x + POPUP_OFFSET, location.y + POPUP_OFFSET);
     }
 
     private static void setupTray(Timer timer) {
