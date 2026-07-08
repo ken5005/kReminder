@@ -212,7 +212,9 @@ public class Main {
     }
 
     private static void showPopup(Reminder r) {
-        JDialog dialog = new JDialog((Frame) null, "kReminder", true);
+        // 非モーダル化: モーダルのままだと setVisible(true) が EDT をブロックし、
+        // ポップアップ表示中に1秒 Timer（残り時間表示・編集）が全部止まってしまう
+        JDialog dialog = new JDialog((Frame) null, "kReminder", false);
         dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
         dialog.setLayout(new BorderLayout(10, 10));
 
