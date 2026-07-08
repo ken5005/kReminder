@@ -47,7 +47,7 @@ public class Main {
     // ポップアップ同時表示の上限。全処理が EDT 一本なのでカウンタの同期は不要
     private static final int MAX_POPUPS = 10;
     // 位置ずらしの1回あたりオフセット(px)。動作確認時に折り返しを見るため値を変えられるよう定数化
-    private static final int POPUP_OFFSET = 40;
+    private static final int POPUP_OFFSET = 105;
 
     private static final Deque<Reminder> popupQueue = new ArrayDeque<>();
     private static int openPopupCount = 0;
