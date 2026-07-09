@@ -9,9 +9,10 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import java.awt.*;
 import java.awt.event.KeyEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.time.Clock;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 
 /**
  * リマインダー編集ダイアログ（GUI仕様v2 ③-b/③-c）。
@@ -20,14 +21,10 @@ import java.time.format.DateTimeFormatter;
  */
 public class EditDialog extends JDialog {
 
-    // EditFormLogic と同じ書式（共通化は無理にしない＝重複を許容）
-    private static final DateTimeFormatter FIRE_AT_FORMAT =
-        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-
     private final Clock clock;
 
     // ③-c/③-dから参照するため各入力欄をフィールドとして保持する
-    private final JTextField execTimeField = new JTextField(20);
+    private final DateTimeField execTimeField = new DateTimeField();
     private final JTextField repeatField = new JTextField(20);
     private final JComboBox<Reminder.Priority> priorityCombo = new JComboBox<>(Reminder.Priority.values());
     private final JTextField commentField = new JTextField(20);
@@ -43,8 +40,8 @@ public class EditDialog extends JDialog {
         super(owner, "リマインダー編集", true);
         this.clock = clock;
 
-        // 選択行の既存値を各欄へ流し込む。null許容フィールドは空文字にフォールバック
-        execTimeField.setText(original.fireAt == null ? "" : original.fireAt.format(FIRE_AT_FORMAT));
+        // 選択行の既存値を各欄へ流し込む。編集パスのfireAtは非null（新規ボタンは未実装）
+        execTimeField.setDateTime(original.fireAt);
         repeatField.setText(original.repeat == null ? "" : original.repeat);
         priorityCombo.setSelectedItem(original.priority);
         commentField.setText(original.message == null ? "" : original.message);
@@ -61,7 +58,8 @@ public class EditDialog extends JDialog {
             @Override public void removeUpdate(DocumentEvent e) { updatePreview(); }
             @Override public void changedUpdate(DocumentEvent e) { updatePreview(); }
         };
-        execTimeField.getDocument().addDocumentListener(previewUpdater);
+        // 実行時刻欄は打鍵・移動・確定・閉店を含む状態変化のたびにChangeListenerで通知される
+        execTimeField.addChangeListener(this::updatePreview);
         repeatField.getDocument().addDocumentListener(previewUpdater);
 
         getContentPane().add(buildForm(), BorderLayout.CENTER);
@@ -72,6 +70,16 @@ public class EditDialog extends JDialog {
             e -> dispose(),
             KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
             JComponent.WHEN_IN_FOCUSED_WINDOW);
+
+        // Enter2回で登録完了（1回目=欄確定、2回目=OK）させるためデフォルトボタンを張る
+        getRootPane().setDefaultButton(okButton);
+
+        // ダイアログを開いた時点でカーソルは日欄で活性（§4.8）＝実キーボードフォーカスもそこへ当てる
+        addWindowListener(new WindowAdapter() {
+            @Override public void windowOpened(WindowEvent e) {
+                execTimeField.requestFocusInWindow();
+            }
+        });
 
         // 初期表示時点のプレビュー・OK活性を既存値に合わせておく
         updatePreview();
@@ -101,7 +109,7 @@ public class EditDialog extends JDialog {
      */
     private void updatePreview() {
         String preview = EditFormLogic.buildPreview(
-            execTimeField.getText(),
+            execTimeField.getExecTimeText(),
             repeatField.getText(),
             LocalDateTime.now(clock),
             HolidayCheck.NONE);
@@ -109,7 +117,10 @@ public class EditDialog extends JDialog {
             previewArea.setText(preview);
             previewArea.setCaretPosition(0);
         }
-        okButton.setEnabled(EditFormLogic.isTotallyValid(execTimeField.getText(), repeatField.getText()));
+        // カーソル活性中（未確定の編集中）はOKを押せない（§4.8）
+        okButton.setEnabled(
+            EditFormLogic.isTotallyValid(execTimeField.getExecTimeText(), repeatField.getText())
+                && !execTimeField.isEditing());
     }
 
     /** ラベル＋入力欄をGridBagLayoutで縦に並べ、最終行にプレビュー欄を置く。 */
@@ -173,7 +184,7 @@ public class EditDialog extends JDialog {
     }
 
     public String getExecTimeText() {
-        return execTimeField.getText();
+        return execTimeField.getExecTimeText();
     }
 
     public String getRepeatText() {
