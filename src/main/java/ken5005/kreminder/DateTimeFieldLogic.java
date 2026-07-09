@@ -69,12 +69,20 @@ public final class DateTimeFieldLogic {
         return deactivate(s);
     }
 
-    /** Space。Enter の確定に加え、カーソルより下位の欄をすべて最小値にしてから消滅させる。 */
+    /**
+     * Space。カーソル欄の入力バッファが活性中（打ちかけがある）なら、その打ちかけをゼロ埋め確定し
+     * （現欄は打った値のまま）、下位（カーソルより右）の欄だけを最小値にする。
+     * バッファが非活性（欄に居るがまだ何も打っていない＝再進入直後や自動送り直後）なら、
+     * 現欄を含めて最小値にする（例: 時を打ち終えて分へ自動送りされた直後にSpaceを押した場合、
+     * 分自身もクリアされないと「23:45:55」から「1」「2」「Space」で「12:00:00」にならない）。
+     * いずれも確定後カーソル消滅。
+     */
     public static DateTimeFieldState pressSpace(DateTimeFieldState s) {
         if (s.cursor() == null) return s;
         DateField cursorField = s.cursor();
+        boolean bufferActive = s.buffer() != null;
         DateTimeFieldState committed = commitBuffer(s);
-        DateTimeFieldState filled = fillBelowWithMinimum(committed, cursorField);
+        DateTimeFieldState filled = fillFromMinimum(committed, cursorField, bufferActive);
         return withCursorBuffer(filled, null, null);
     }
 
@@ -147,10 +155,17 @@ public final class DateTimeFieldLogic {
         return valueOf(s, field);
     }
 
-    private static DateTimeFieldState fillBelowWithMinimum(DateTimeFieldState s, DateField cursorField) {
+    /**
+     * cursorField 以降の欄を最小値にする。excludeCursor=true ならカーソル欄自身は対象外（下位のみ）、
+     * false ならカーソル欄自身も含める。
+     */
+    private static DateTimeFieldState fillFromMinimum(DateTimeFieldState s, DateField cursorField, boolean excludeCursor) {
         DateTimeFieldState result = s;
         for (DateField f : DateField.values()) {
-            if (f.ordinal() > cursorField.ordinal()) {
+            boolean shouldMinimize = excludeCursor
+                ? f.ordinal() > cursorField.ordinal()
+                : f.ordinal() >= cursorField.ordinal();
+            if (shouldMinimize) {
                 int min = (f == DateField.MONTH || f == DateField.DAY) ? 1 : 0;
                 result = withValue(result, f, min);
             }

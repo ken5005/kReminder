@@ -82,18 +82,67 @@ class DateTimeFieldLogicTest {
         assertNull(s.cursor());
     }
 
-    // Space: Enterの確定に加え、下位の欄をすべて最小値にする
+    // Space（バッファ活性中）: 現欄は打ちかけをゼロ埋め確定して値を活かし、下位の欄だけ最小値にする
     @Test
-    void spaceFillsFieldsBelowCursorWithMinimum() {
+    void spaceWithActiveBufferKeepsCursorValueAndFillsFieldsBelow() {
         DateTimeFieldState s = DateTimeFieldLogic.clickField(base(), DateField.MONTH);
-        s = DateTimeFieldLogic.typeDigit(s, 5); // バッファ"5"（幅2未達）
+        s = DateTimeFieldLogic.typeDigit(s, 5); // バッファ"5"（幅2未達＝活性中）
         s = DateTimeFieldLogic.pressSpace(s);
 
         assertEquals(2026, s.year());   // カーソルより上位は不変
-        assertEquals(5, s.month());     // "5" -> ゼロ埋めで 05
+        assertEquals(5, s.month());     // 活性中バッファ"5" -> ゼロ埋めで05のまま活かす
         assertEquals(1, s.day());       // 下位は最小値
         assertEquals(0, s.hour());
         assertEquals(0, s.minute());
+        assertEquals(0, s.second());
+        assertNull(s.cursor());
+    }
+
+    // Space（バッファ活性中）: MINUTE欄で打ちかけを確定して活かし、SECONDだけ最小値にする
+    @Test
+    void spaceWithActiveBufferOnMinuteKeepsValueAndFillsSecond() {
+        DateTimeFieldState s = DateTimeFieldLogic.clickField(base(), DateField.MINUTE);
+        s = DateTimeFieldLogic.typeDigit(s, 3); // バッファ"3"（幅2未達＝活性中）
+        s = DateTimeFieldLogic.pressSpace(s);
+
+        assertEquals(3, s.minute());  // 活性中バッファ"3" -> ゼロ埋めで03のまま活かす
+        assertEquals(0, s.second());  // 下位は最小値
+        assertEquals(10, s.hour());   // カーソルより上位は不変
+        assertEquals(24, s.day());
+        assertEquals(7, s.month());
+        assertEquals(2026, s.year());
+        assertNull(s.cursor());
+    }
+
+    // Space（バッファ非活性＝欄に居るがまだ何も打っていない）: 現欄を含めて最小値にする
+    @Test
+    void spaceWithInactiveBufferMinimizesCursorFieldToo() {
+        DateTimeFieldState s = DateTimeFieldLogic.clickField(base(), DateField.DAY); // バッファ非活性
+
+        s = DateTimeFieldLogic.pressSpace(s);
+
+        assertEquals(1, s.day());     // カーソル欄自身も最小値
+        assertEquals(0, s.hour());
+        assertEquals(0, s.minute());
+        assertEquals(0, s.second());
+        assertEquals(7, s.month());   // カーソルより上位は不変
+        assertEquals(2026, s.year());
+        assertNull(s.cursor());
+    }
+
+    // Space（自動送り直後の非活性＝実使用再現）: 23:45:55を「1」「2」「Space」で12:00:00にしたいケース
+    @Test
+    void spaceAfterAutoAdvanceMinimizesCursorFieldToo() {
+        DateTimeFieldState s = DateTimeFieldLogic.clickField(base(), DateField.HOUR);
+        s = DateTimeFieldLogic.typeDigit(s, 1);
+        s = DateTimeFieldLogic.typeDigit(s, 2); // hour=12確定・自動送りでカーソルはMINUTEへ（バッファ非活性）
+        assertEquals(DateField.MINUTE, s.cursor());
+        assertNull(s.buffer());
+
+        s = DateTimeFieldLogic.pressSpace(s);
+
+        assertEquals(12, s.hour());   // 打ちかけた時はそのまま
+        assertEquals(0, s.minute());  // 自動送り先の分自身もクリアされる
         assertEquals(0, s.second());
         assertNull(s.cursor());
     }
