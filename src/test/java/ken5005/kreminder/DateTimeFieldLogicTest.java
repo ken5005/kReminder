@@ -146,6 +146,28 @@ class DateTimeFieldLogicTest {
         assertNull(s.cursor());
     }
 
+    // stepUpDown: バッファ活性中でも、まず未完バッファがゼロ埋め確定されてから±1される
+    @Test
+    void stepUpDownCommitsPartialBufferBeforeApplyingDelta() {
+        DateTimeFieldState upState = DateTimeFieldLogic.clickField(base(), DateField.DAY);
+        upState = DateTimeFieldLogic.typeDigit(upState, 1); // バッファ"1"（幅2未達で活性のまま）
+        assertEquals(DateField.DAY, upState.cursor());
+        assertEquals("1", upState.buffer());
+
+        DateTimeFieldState upResult = DateTimeFieldLogic.stepUpDown(upState, 1);
+        assertEquals(2, upResult.day()); // "1" -> ゼロ埋め01確定 -> +1で2
+        assertEquals(DateField.DAY, upResult.cursor());
+        assertNull(upResult.buffer());
+
+        DateTimeFieldState downState = DateTimeFieldLogic.clickField(base(), DateField.DAY);
+        downState = DateTimeFieldLogic.typeDigit(downState, 2); // バッファ"2"（幅2未達で活性のまま）
+
+        DateTimeFieldState downResult = DateTimeFieldLogic.stepUpDown(downState, -1);
+        assertEquals(1, downResult.day()); // "2" -> ゼロ埋め02確定 -> -1で1
+        assertEquals(DateField.DAY, downResult.cursor());
+        assertNull(downResult.buffer());
+    }
+
     // ↑↓: 秒/分/時/月のラップ境界
     static Stream<Arguments> wrapCases() {
         return Stream.of(
