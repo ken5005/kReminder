@@ -22,6 +22,8 @@ public class Config {
     private static final String KEY_SHOW_FAR = "filter.showFar";
     private static final String KEY_SHOW_LOW_PRIORITY = "filter.showLowPriority";
     private static final String KEY_SHOW_ALL_REPEAT = "filter.showAllRepeat";
+    private static final String KEY_WAV_DIR = "snd.wav.dir";
+    private static final String DEFAULT_WAV_DIR = "C:\\tools2\\etc\\wav";
 
     private final Path configPath;
 
@@ -31,6 +33,7 @@ public class Config {
     private boolean showFar = false;
     private boolean showLowPriority = true;
     private boolean showAllRepeat = false;
+    private String wavDir = DEFAULT_WAV_DIR;
 
     public Config() {
         this(buildConfigPath());
@@ -66,6 +69,14 @@ public class Config {
         showFar = parseBool(props, KEY_SHOW_FAR, showFar);
         showLowPriority = parseBool(props, KEY_SHOW_LOW_PRIORITY, showLowPriority);
         showAllRepeat = parseBool(props, KEY_SHOW_ALL_REPEAT, showAllRepeat);
+
+        // wavDirキーが無い設定ファイルにはデフォルト値を書き戻す（設定ファイルが説明的であることを優先）
+        if (props.getProperty(KEY_WAV_DIR) == null) {
+            wavDir = DEFAULT_WAV_DIR;
+            save();
+        } else {
+            wavDir = props.getProperty(KEY_WAV_DIR);
+        }
     }
 
     public void save() {
@@ -76,6 +87,7 @@ public class Config {
         props.setProperty(KEY_SHOW_FAR, Boolean.toString(showFar));
         props.setProperty(KEY_SHOW_LOW_PRIORITY, Boolean.toString(showLowPriority));
         props.setProperty(KEY_SHOW_ALL_REPEAT, Boolean.toString(showAllRepeat));
+        props.setProperty(KEY_WAV_DIR, wavDir);
 
         try {
             Files.createDirectories(configPath.getParent());
@@ -111,4 +123,6 @@ public class Config {
 
     public boolean isShowAllRepeat() { return showAllRepeat; }
     public void setShowAllRepeat(boolean showAllRepeat) { this.showAllRepeat = showAllRepeat; }
+
+    public Path getWavDir() { return Path.of(wavDir); }
 }
