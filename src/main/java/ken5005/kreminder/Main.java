@@ -11,6 +11,7 @@ import ken5005.kreminder.holiday.HolidayService;
 import ken5005.kreminder.holiday.HolidayState;
 import ken5005.kreminder.holiday.HolidayStatus;
 import ken5005.kreminder.holiday.OverlayHolidayCheck;
+import ken5005.kreminder.sound.SND;
 
 import javax.swing.*;
 import java.awt.*;
@@ -111,10 +112,18 @@ public class Main {
             MainWindow window = new MainWindow(clock, reminders, store);
             PanelSink panelSink = new PanelSink(window.getDebugTextArea());
             DEB.init(clock, new ConsoleSink(), new FileSink(clock), panelSink);
+
+            // snd.wav.dir はMainWindow内のConfigとは別インスタンス。DEB配線直後に読んで
+            // SNDワーカーを起動するだけの一度きりの用途なので、フィルタ状態と共有する必要はない
+            Config config = new Config();
+            config.load();
+            SND.init(config.getWavDir());
+
             window.addWindowListener(new WindowAdapter() {
                 @Override
                 public void windowClosing(WindowEvent e) {
                     DEB.shutdown();
+                    SND.shutdown();
                 }
             });
             window.setVisible(true);
@@ -310,6 +319,7 @@ public class Main {
             timer.stop();
             SystemTray.getSystemTray().remove(trayIcon);
             DEB.shutdown();
+            SND.shutdown();
             System.exit(0);
         });
         popup.add(exit);
