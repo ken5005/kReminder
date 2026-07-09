@@ -25,10 +25,12 @@ public final class EditFormLogic {
     private static final String REP_FORMAT_ERROR =
         "繰り返し書式エラー 例) rep=1d;ex=0,6 / rep=1M;day=25;kuriage";
     private static final int PREVIEW_COUNT = 10;
+    private static final int MIN_YEAR = 2000;
 
     /**
      * 実行時刻文字列をパースする。秒省略時は00秒扱い。
      * 書式不正・null・空文字（trim後）は empty。過去日時でも書式が正しければ valid。
+     * 年が MIN_YEAR 未満の場合も empty（日時入力ウィジェットの年欄途中Enterがサイレントに通るのを防ぐ）。
      */
     public static Optional<LocalDateTime> parseExecTime(String s) {
         if (s == null) return Optional.empty();
@@ -36,15 +38,19 @@ public final class EditFormLogic {
         if (trimmed.isEmpty()) return Optional.empty();
 
         try {
-            return Optional.of(LocalDateTime.parse(trimmed, WITH_SECONDS));
+            return withMinYear(LocalDateTime.parse(trimmed, WITH_SECONDS));
         } catch (DateTimeParseException e) {
             // 秒省略形式で再試行
         }
         try {
-            return Optional.of(LocalDateTime.parse(trimmed, WITHOUT_SECONDS));
+            return withMinYear(LocalDateTime.parse(trimmed, WITHOUT_SECONDS));
         } catch (DateTimeParseException e) {
             return Optional.empty();
         }
+    }
+
+    private static Optional<LocalDateTime> withMinYear(LocalDateTime dt) {
+        return dt.getYear() < MIN_YEAR ? Optional.empty() : Optional.of(dt);
     }
 
     /**

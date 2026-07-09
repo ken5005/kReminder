@@ -28,7 +28,10 @@ class EditFormLogicTest {
             Arguments.of("2026-13-01 10:00", Optional.empty()), // 不正な月
             Arguments.of("", Optional.empty()),                // 空文字
             Arguments.of("   ", Optional.empty()),              // 空白のみ
-            Arguments.of(null, Optional.empty())                // null
+            Arguments.of(null, Optional.empty()),               // null
+            Arguments.of("1999-12-31 23:59:59", Optional.empty()), // 年下限未満
+            Arguments.of("2000-01-01 00:00:00", Optional.of(LocalDateTime.of(2000, 1, 1, 0, 0, 0))), // 年下限ちょうど
+            Arguments.of("0026-07-24 12:00:00", Optional.empty()) // 年欄途中Enter相当（0026年）
         );
     }
 
