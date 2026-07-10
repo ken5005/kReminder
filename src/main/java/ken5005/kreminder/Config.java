@@ -15,6 +15,7 @@ import java.util.Properties;
 public class Config {
 
     private static final String FILE_NAME = "config.properties";
+    private static final String SOUND_MAP_FILE_NAME = "sound-map.properties";
 
     private static final String KEY_SHOW_ENDED = "filter.showEnded";
     private static final String KEY_SHOW_IMMINENT = "filter.showImminent";
@@ -44,11 +45,19 @@ public class Config {
     }
 
     private static Path buildConfigPath() {
+        return configDir().resolve(FILE_NAME);
+    }
+
+    /** config.properties と同じ APPDATA→user.home フォールバックで sound-map.properties を指す。 */
+    public Path getSoundMapPath() {
+        return configDir().resolve(SOUND_MAP_FILE_NAME);
+    }
+
+    private static Path configDir() {
         String appData = System.getenv("APPDATA");
-        Path dir = appData != null
+        return appData != null
             ? Path.of(appData, "kReminder")
             : Path.of(System.getProperty("user.home"), "kReminder");
-        return dir.resolve(FILE_NAME);
     }
 
     /** ファイル無し・I/O失敗はデフォルト値を維持したまま return する。キー欠けも同様。 */

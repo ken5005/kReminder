@@ -3,6 +3,7 @@ package ken5005.kreminder;
 import ken5005.kreminder.debug.ConsoleSink;
 import ken5005.kreminder.debug.DEB;
 import ken5005.kreminder.debug.FileSink;
+import ken5005.kreminder.gui.FatalErrorDialog;
 import ken5005.kreminder.gui.MainWindow;
 import ken5005.kreminder.gui.PanelSink;
 import ken5005.kreminder.holiday.HolidayLog;
@@ -12,12 +13,18 @@ import ken5005.kreminder.holiday.HolidayState;
 import ken5005.kreminder.holiday.HolidayStatus;
 import ken5005.kreminder.holiday.OverlayHolidayCheck;
 import ken5005.kreminder.sound.SND;
+import ken5005.kreminder.sound.SoundMapBuilder;
+import ken5005.kreminder.sound.SoundMapParser;
+import ken5005.kreminder.sound.WavLoader;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -27,6 +34,7 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class Main {
@@ -117,7 +125,7 @@ public class Main {
             // SNDワーカーを起動するだけの一度きりの用途なので、フィルタ状態と共有する必要はない
             Config config = new Config();
             config.load();
-            SND.init(config.getWavDir());
+            initSound(config);
 
             window.addWindowListener(new WindowAdapter() {
                 @Override
@@ -160,6 +168,58 @@ public class Main {
             },
             clock
         );
+    }
+
+    /**
+     * SNDの初期化一式：wavDir走査→sound-map未生成なら雛形書き出し→有ればUTF-8読込→parse→build→SND.init。
+     * wavDirが無ければSND自体をinitせずスキップ（従来のgraceful挙動を維持）。
+     * sound-mapの読み込み失敗・parse/buildの不正（dangling/重複キー/衝突/不正行）は
+     * FatalErrorDialogでloudに落とす（手編集した設定が壊れて読めない状態を握り潰さない方針）。
+     */
+    private static void initSound(Config config) {
+        Path wavDir = config.getWavDir();
+        if (!Files.isDirectory(wavDir)) {
+            DEB.pr("SND: wavDir が存在しない: " + wavDir + "（音声再生はスキップ）");
+            return;
+        }
+        List<File> wavFiles = WavLoader.load(wavDir);
+
+        Path soundMapPath = config.getSoundMapPath();
+        Map<String, String> table;
+        if (!Files.exists(soundMapPath)) {
+            // 初回だけ雛形を書き出す。生成した回はテーブル空＝全ファイルstem自動採用のまま進めてよい
+            String template = SoundMapParser.renderTemplate(wavFiles);
+            try {
+                Files.writeString(soundMapPath, template, StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                DEB.pr("sound-map.properties の書き出しに失敗: " + e.getMessage());
+            }
+            table = Map.of();
+        } else {
+            List<String> lines;
+            try {
+                lines = Files.readAllLines(soundMapPath, StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                FatalErrorDialog.showAndExit("sound-map.properties が読み込めません: " + e.getMessage());
+                return;
+            }
+            try {
+                table = SoundMapParser.parse(lines);
+            } catch (IllegalArgumentException e) {
+                FatalErrorDialog.showAndExit(e.getMessage());
+                return;
+            }
+        }
+
+        Map<String, File> soundMap;
+        try {
+            soundMap = SoundMapBuilder.build(wavFiles, table);
+        } catch (IllegalArgumentException e) {
+            FatalErrorDialog.showAndExit(e.getMessage());
+            return;
+        }
+
+        SND.init(soundMap);
     }
 
     /** Wraps base with the session-level override overlay (same add/remove for every base). */

@@ -2,33 +2,28 @@ package ken5005.kreminder.sound;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Map;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class WavLoaderTest {
 
     @ParameterizedTest
-    @CsvSource({
-        "test.wav,   test",
-        "test.WAV,   test",
-        "ごん.wav,   ごん",
-        "カッ.WAV,   カッ",
-    })
-    void recognizedFileNameBecomesKey(String fileName, String expectedKey) throws IOException {
+    @ValueSource(strings = {"test.wav", "test.WAV", "ごん.wav", "カッ.WAV"})
+    void recognizedWavFileIsListed(String fileName) throws IOException {
         Path dir = Files.createTempDirectory("wavloadertest");
         Files.createFile(dir.resolve(fileName));
 
-        Map<String, File> map = WavLoader.load(dir);
+        List<File> files = WavLoader.load(dir);
 
-        assertEquals(1, map.size());
-        assertTrue(map.containsKey(expectedKey));
+        assertEquals(1, files.size());
+        assertEquals(fileName, files.get(0).getName());
     }
 
     @Test
@@ -36,26 +31,39 @@ class WavLoaderTest {
         Path dir = Files.createTempDirectory("wavloadertest");
         Files.createFile(dir.resolve("test.mp3"));
 
-        Map<String, File> map = WavLoader.load(dir);
+        List<File> files = WavLoader.load(dir);
 
-        assertTrue(map.isEmpty());
+        assertTrue(files.isEmpty());
     }
 
     @Test
-    void nonExistentDirReturnsEmptyMap() {
+    void resultIsSortedByFileNameAscending() throws IOException {
+        Path dir = Files.createTempDirectory("wavloadertest");
+        Files.createFile(dir.resolve("notify.wav"));
+        Files.createFile(dir.resolve("ごん.wav"));
+        Files.createFile(dir.resolve("あいう.wav"));
+
+        List<File> files = WavLoader.load(dir);
+
+        List<String> names = files.stream().map(File::getName).toList();
+        assertEquals(List.of("notify.wav", "あいう.wav", "ごん.wav"), names);
+    }
+
+    @Test
+    void nonExistentDirReturnsEmptyList() {
         Path dir = Path.of("C:\\this\\path\\should\\not\\exist\\kreminder-wavloader-test");
 
-        Map<String, File> map = WavLoader.load(dir);
+        List<File> files = WavLoader.load(dir);
 
-        assertTrue(map.isEmpty());
+        assertTrue(files.isEmpty());
     }
 
     @Test
-    void emptyDirReturnsEmptyMap() throws IOException {
+    void emptyDirReturnsEmptyList() throws IOException {
         Path dir = Files.createTempDirectory("wavloadertest");
 
-        Map<String, File> map = WavLoader.load(dir);
+        List<File> files = WavLoader.load(dir);
 
-        assertTrue(map.isEmpty());
+        assertTrue(files.isEmpty());
     }
 }
