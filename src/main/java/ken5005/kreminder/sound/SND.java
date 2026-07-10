@@ -3,13 +3,12 @@ package ken5005.kreminder.sound;
 import ken5005.kreminder.debug.DEB;
 
 import java.io.File;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Map;
 
 /**
  * 音声再生の静的ファサード。DEBと同じ思想：どこからでも呼べる・本体を止めない・例外を呑む。
- * init前やwavDir不在時はplay()がsilent dropになる（音が鳴らないだけで本体は動き続ける）。
+ * init前はplay()がsilent dropになる（音が鳴らないだけで本体は動き続ける）。
+ * wavDirの走査・sound-mapテーブルとの突き合わせはMain側の責務＝ここは組み立て済みのMapを受け取るだけ。
  */
 public final class SND {
 
@@ -17,20 +16,19 @@ public final class SND {
 
     private SND() {}
 
-    public static void init(Path wavDir) {
+    public static void init(Map<String, File> soundMap) {
         if (worker != null) {
             DEB.pr("SND: 既にinit済み（2回目以降の呼び出しは無視）");
             return;
         }
-        if (!Files.isDirectory(wavDir)) {
-            DEB.pr(new RuntimeException("SND: wavDir が存在しない: " + wavDir));
-            return;
-        }
-        Map<String, File> soundMap = WavLoader.load(wavDir);
         SoundWorker w = new SoundWorker(soundMap);
         w.setDaemon(true);
         w.start();
         worker = w;
+    }
+
+    public static void play(String name) {
+        play(name, 1.0f);
     }
 
     public static void play(String name, float volume) {

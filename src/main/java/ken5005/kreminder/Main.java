@@ -27,6 +27,7 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class Main {
@@ -117,7 +118,9 @@ public class Main {
             // SNDワーカーを起動するだけの一度きりの用途なので、フィルタ状態と共有する必要はない
             Config config = new Config();
             config.load();
-            SND.init(config.getWavDir());
+            // TODO(sound-map step4で本配線): WavLoader.load + sound-map読込/parse/buildへ差し替える。
+            // このstepではSND.initのシグネチャ変更(Map<String,File>化)にコンパイルを合わせるだけの仮対応。
+            SND.init(Map.of());
 
             window.addWindowListener(new WindowAdapter() {
                 @Override

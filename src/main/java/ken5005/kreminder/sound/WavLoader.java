@@ -5,13 +5,15 @@ import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Comparator;
+import java.util.List;
 
 /**
- * wavDir直下の.wavファイルを列挙し、音声名（拡張子抜きファイル名）→Fileのマップを作る純関数。
- * I/Oは行うが副作用はない（読み取り専用・例外を投げない）。
+ * wavDir直下の.wav/.WAVファイルを列挙する純関数。
+ * 音声名の解決（sound-mapテーブル照合・stem自動採用）はSoundMapBuilderの責務なので、
+ * ここでは列挙とファイル名昇順ソートだけを行う（決定的な順序にするため）。
  */
 public final class WavLoader {
 
@@ -19,23 +21,23 @@ public final class WavLoader {
 
     private WavLoader() {}
 
-    public static Map<String, File> load(Path wavDir) {
-        Map<String, File> result = new HashMap<>();
+    public static List<File> load(Path wavDir) {
         if (wavDir == null || !Files.isDirectory(wavDir)) {
-            return Collections.unmodifiableMap(result);
+            return List.of();
         }
+        List<File> result = new ArrayList<>();
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(wavDir)) {
             for (Path entry : stream) {
                 String fileName = entry.getFileName().toString();
                 if (!fileName.toLowerCase().endsWith(EXT)) {
                     continue;
                 }
-                String name = fileName.substring(0, fileName.length() - EXT.length());
-                result.put(name, entry.toFile());
+                result.add(entry.toFile());
             }
         } catch (IOException e) {
-            return Collections.unmodifiableMap(new HashMap<>());
+            return List.of();
         }
-        return Collections.unmodifiableMap(result);
+        result.sort(Comparator.comparing(File::getName));
+        return Collections.unmodifiableList(result);
     }
 }
