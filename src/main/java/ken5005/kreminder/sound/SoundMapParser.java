@@ -62,7 +62,8 @@ public final class SoundMapParser {
         return sb.toString();
     }
 
-    private static String stemOf(String fileName) {
+    /** ファイル名から拡張子(.wav・大小無視)を除いたstemを返す。SoundMapBuilderの自動stem採用とも共有する。 */
+    static String stemOf(String fileName) {
         if (fileName.length() >= EXT_WAV.length() && fileName.toLowerCase().endsWith(EXT_WAV)) {
             return fileName.substring(0, fileName.length() - EXT_WAV.length());
         }
