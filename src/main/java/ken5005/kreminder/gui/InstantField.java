@@ -55,6 +55,15 @@ public class InstantField extends JPanel implements ExecTimeInput {
         return this;
     }
 
+    /**
+     * JPanel（自分自身）は既定でfocusableでないため、そのままではEditDialogのwindowOpenedからの
+     * requestFocusInWindow()が内部のtextFieldに届く保証がない。ここでオーバーライドして明示的に委譲する。
+     */
+    @Override
+    public boolean requestFocusInWindow() {
+        return textField.requestFocusInWindow();
+    }
+
     /** instant は空欄から始まる仕様。呼ばれても無視する。 */
     @Override
     public void setDateTime(LocalDateTime dt) {
