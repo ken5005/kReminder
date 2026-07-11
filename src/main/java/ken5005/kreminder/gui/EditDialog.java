@@ -3,11 +3,13 @@ package ken5005.kreminder.gui;
 import ken5005.kreminder.EditFormLogic;
 import ken5005.kreminder.HolidayCheck;
 import ken5005.kreminder.Reminder;
+import ken5005.kreminder.sound.SND;
 
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import java.awt.*;
+import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
@@ -62,6 +64,8 @@ public class EditDialog extends JDialog {
         // 実行時刻欄は打鍵・移動・確定・閉店を含む状態変化のたびにChangeListenerで通知される
         execTimeField.addChangeListener(this::updatePreview);
         repeatField.getDocument().addDocumentListener(previewUpdater);
+        // 実行時刻欄でのEnterはDateTimeField内で欄確定まで済ませてから通知される（v1.2・日時入力ウィジェット仕様§3.5）
+        execTimeField.addEnterListener(this::onEnterPressed);
 
         getContentPane().add(buildForm(), BorderLayout.CENTER);
         getContentPane().add(buildButtons(), BorderLayout.SOUTH);
@@ -72,7 +76,16 @@ public class EditDialog extends JDialog {
             KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
             JComponent.WHEN_IN_FOCUSED_WINDOW);
 
-        // Enter2回で登録完了（1回目=欄確定、2回目=OK）させるためデフォルトボタンを張る
+        // 実行時刻欄以外（繰り返し・コメント・Cmd等）でのEnterもここで一元的に拾う（v1.2）。
+        // DateTimeFieldはWHEN_FOCUSEDでEnterを握っており、InputMapの優先順位はWHEN_FOCUSED >
+        // WHEN_IN_FOCUSED_WINDOWなので、実行時刻欄にフォーカスがある間はDateTimeField側だけが動く（二重発火しない）
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+            .put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "okOrGon");
+        getRootPane().getActionMap().put("okOrGon", new AbstractAction() {
+            @Override public void actionPerformed(ActionEvent e) { onEnterPressed(); }
+        });
+
+        // OKボタンの見た目（太枠）のために残す。Enterの実処理は上のokOrGonバインドが担う（v1.2）
         getRootPane().setDefaultButton(okButton);
 
         // ダイアログを開いた時点でカーソルは日欄で活性（§4.8）＝実キーボードフォーカスもそこへ当てる
@@ -168,6 +181,20 @@ public class EditDialog extends JDialog {
         panel.add(okButton);
         panel.add(cancelButton);
         return panel;
+    }
+
+    /**
+     * Enter押下の共通処理（日時入力ウィジェット仕様 v1.2 §3.5）。
+     * DateTimeField.handleEnter()は欄確定→ChangeListener→updatePreview()→okButton.setEnabled(...)を
+     * 同期で走らせてからこのリスナを呼ぶので、ここでのisEnabled()は最新状態。
+     * OKが活性なら登録完了、非活性（入力不正）なら警告音を鳴らして気づかせる。
+     */
+    private void onEnterPressed() {
+        if (okButton.isEnabled()) {
+            okButton.doClick();
+        } else {
+            SND.play("GON");
+        }
     }
 
     /**
