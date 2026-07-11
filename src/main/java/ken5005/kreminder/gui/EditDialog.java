@@ -171,10 +171,21 @@ public class EditDialog extends JDialog {
     }
 
     /**
-     * OKボタンの処理。okPressedをtrueにしてから閉じる。
+     * OKボタンの処理。コメント空の警告（GUI仕様v2 §4.9）を確認してからokPressedをtrueにして閉じる。
      * 入力値のReminderへの書き戻し・保存はEditDialogでは行わず、MainWindow側の責務とする。
      */
     private void onOk() {
+        var fireAt = EditFormLogic.parseExecTime(execTimeField.getExecTimeText());
+        if (fireAt.isPresent()
+                && EditFormLogic.needsEmptyCommentWarning(
+                    commentField.getText(), fireAt.get(), getSelectedPriority(), cmdField.getText(), repeatField.getText(),
+                    LocalDateTime.now(clock))) {
+            int result = JOptionPane.showConfirmDialog(
+                this, "<<注意：コメントが空です>>", "確認", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
+            if (result != JOptionPane.OK_OPTION) {
+                return;
+            }
+        }
         okPressed = true;
         dispose();
     }
