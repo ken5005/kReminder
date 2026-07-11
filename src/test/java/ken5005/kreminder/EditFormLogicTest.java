@@ -120,4 +120,34 @@ class EditFormLogicTest {
         String result = EditFormLogic.buildPreview("2026-06-24 15:30:00", "", now, HolidayCheck.NONE);
         assertEquals("（発火済み）\n2026-06-24 15:30:00", result);
     }
+
+    // needsEmptyCommentWarning: コメント非空/空・時間境界・非デフォルト条件・null安全 を表駆動で確認
+    private static final LocalDateTime WARN_NOW = LocalDateTime.of(2026, 6, 24, 10, 0);
+
+    static Stream<Arguments> needsEmptyCommentWarningCases() {
+        return Stream.of(
+            Arguments.of("買い物", WARN_NOW.plusYears(1), Reminder.Priority.Pri1, "cmd", "rep=1d", false), // コメント非空なら常にfalse
+            Arguments.of("", WARN_NOW.plusMinutes(5), Reminder.Priority.Pri3, "", "", false),               // 境界＝ちょうど5分後は素通し
+            Arguments.of("", WARN_NOW.plusMinutes(5).plusSeconds(1), Reminder.Priority.Pri3, "", "", true), // 5分1秒後は警告
+            Arguments.of("", WARN_NOW.plusMinutes(1), Reminder.Priority.Pri3, "", "", false),               // ラーメンタイマー
+            Arguments.of("", WARN_NOW.minusMinutes(1), Reminder.Priority.Pri3, "", "", false),              // 過去
+            Arguments.of("   ", WARN_NOW.plusYears(1), Reminder.Priority.Pri3, "", "", true),               // 空白のみも空扱い
+            Arguments.of(null, WARN_NOW.plusMinutes(1), Reminder.Priority.Pri3, "", "", false),             // コメントnull・全デフォルト
+            Arguments.of("", WARN_NOW.plusMinutes(1), Reminder.Priority.Pri1, "", "", true),                // 非デフォルト＝優先度
+            Arguments.of("", WARN_NOW.plusMinutes(1), Reminder.Priority.Pri3, "notepad", "", true),         // 非デフォルト＝Cmd
+            Arguments.of("", WARN_NOW.plusMinutes(1), Reminder.Priority.Pri3, "", "rep=1d", true),          // 非デフォルト＝繰り返し
+            Arguments.of("", WARN_NOW.plusMinutes(1), null, null, null, false),                              // null＝全部デフォルト扱い
+            Arguments.of("", WARN_NOW.plusMinutes(1), Reminder.Priority.Pri3, "  ", "  ", false),            // 空白のみはデフォルト扱い
+            Arguments.of("", null, Reminder.Priority.Pri3, "", "", false),                                   // fireAt null＝時間条件は不成立
+            Arguments.of("", null, Reminder.Priority.Pri1, "", "", true)                                     // fireAt nullでも非デフォルト条件は成立
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("needsEmptyCommentWarningCases")
+    void needsEmptyCommentWarning(
+            String comment, LocalDateTime fireAt, Reminder.Priority priority, String action, String repeat,
+            boolean expected) {
+        assertEquals(expected, EditFormLogic.needsEmptyCommentWarning(comment, fireAt, priority, action, repeat, WARN_NOW));
+    }
 }
