@@ -26,6 +26,7 @@ public final class EditFormLogic {
         "繰り返し書式エラー 例) rep=1d;ex=0,6 / rep=1M;day=25;kuriage";
     private static final int PREVIEW_COUNT = 10;
     private static final int MIN_YEAR = 2000;
+    private static final Duration EMPTY_COMMENT_WARN_THRESHOLD = Duration.ofMinutes(5);
 
     /**
      * 実行時刻文字列をパースする。秒省略時は00秒扱い。
@@ -109,5 +110,32 @@ public final class EditFormLogic {
             }
         }
         return sb.toString();
+    }
+
+    /**
+     * コメント空の警告要否を判定する（GUI仕様v2 §4.9）。
+     * コメントが非空なら常にfalse。コメントが空のときのみ、
+     * 「実行時刻がnow+5分より先」または「Type/Rep/Cmdのいずれかがデフォルトから変更」でtrue。
+     * fireAtがnull（未確定）なら時間条件は不成立として扱う。
+     */
+    public static boolean needsEmptyCommentWarning(
+            String comment,
+            LocalDateTime fireAt,
+            Reminder.Priority priority,
+            String action,
+            String repeat,
+            LocalDateTime now) {
+        if (!isBlank(comment)) return false;
+
+        boolean timeCondition = fireAt != null && fireAt.isAfter(now.plus(EMPTY_COMMENT_WARN_THRESHOLD));
+        boolean nonDefaultCondition = (priority != null && priority != Reminder.Priority.Pri3)
+            || !isBlank(action)
+            || !isBlank(repeat);
+
+        return timeCondition || nonDefaultCondition;
+    }
+
+    private static boolean isBlank(String s) {
+        return s == null || s.trim().isEmpty();
     }
 }
