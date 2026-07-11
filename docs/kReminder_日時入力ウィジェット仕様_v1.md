@@ -1,7 +1,7 @@
-# kReminder 実行時刻の日時入力ウィジェット仕様書 v1.0（③-e）
+# kReminder 実行時刻の日時入力ウィジェット仕様書 v1.1（③-e）
 
-最終更新: 2026-07-11（chat36）
-GUI仕様 v2 §4.8 から分冊（本書が正典・v2 §4.8 はポインタ）。chat31 で仕様確定・chat32 で実装 ship 済み（feat/datetime-field・PR#13）。
+最終更新: 2026-07-11（chat36 → 新規/複製/削除スライスで v1.1 に更新）
+GUI仕様 v2 §4.8 から分冊（本書が正典・v2 §4.8 はポインタ）。chat31 で仕様確定・chat32 で実装 ship 済み（feat/datetime-field・PR#13）。v1.1 で §3.2/§7 の「新規時デフォルト」を確定（新規/複製/削除スライス）。
 
 ---
 
@@ -46,7 +46,7 @@ public void addChangeListener(Runnable l)   // 値変化通知（旧 DocumentLis
 
 ### 3.2 初期状態
 
-編集時は既存値。**新規時は現在日時（→§7・未実装＝C#1 新規/複製/削除スライスで実装予定）**。ダイアログを開いた時点でカーソルは「日」欄にあり活性。
+編集時は既存値。**新規時は現在日時**（→§7・確定＝新規/複製/削除スライス）。ウィジェット自身は無改造で、呼び出し側（`MainWindow`）が `LocalDateTime.now(clock).withSecond(0).withNano(0)` を計算して `setDateTime()` に渡す。ダイアログを開いた時点でカーソルは「日」欄にあり活性。
 
 ### 3.3 打鍵入力
 
@@ -112,7 +112,7 @@ public void addChangeListener(Runnable l)   // 値変化通知（旧 DocumentLis
 
 - **`DateTimeFieldLogic` は clock-free**：now / Clock をコアに入れない（決定的でないと TDD が崩れる）。生 `now()` を埋め込まない。
 - **`stepUpDown` は増減前に `isValid` を門番に置く**：`adjustDay/Month/Year` は妥当状態しか受けない＝「2月31日で日を弄る」類の事故が構造的に起きない。
-- **「新規＝現在日時」デフォルトと Clock のコンストラクタ注入は、C#1（新規/複製/削除スライス）で実装する予定**（③-e 時点では意図的にスコープ外へ送った）。実装時は `DateTimeField` にコンストラクタで `Clock` を注入し、新規時に `initial(LocalDateTime.now(clock))` 相当で初期化する形＝コアの clock-free は維持される。**C#1 完了時に本仕様 §3.2/§7 を v1.1 として更新すること。**
+- **「新規＝現在日時」デフォルトは、新規/複製/削除スライスで確定・実装した（v1.1）**。当初想定していた「`DateTimeField` にコンストラクタで `Clock` を注入する」案は採らなかった＝ウィジェット・`DateTimeFieldLogic` とも clock-free のまま無改造。代わりに呼び出し側（`MainWindow`）が `LocalDateTime.now(clock).withSecond(0).withNano(0)` を計算して `new Reminder()` の `fireAt` にセットし、`EditDialog` 経由で `execTimeField.setDateTime(...)` に渡す形にした＝コアの clock-free 原則（本節冒頭）はそのまま維持される。
 - セパレータは `-` / `:`（`/` ではない）。chat32 目視での「/ のはず」は思い込みの見間違いで、変更なし。
 
 ---
