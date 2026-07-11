@@ -23,10 +23,14 @@ import java.time.LocalDateTime;
  */
 public class EditDialog extends JDialog {
 
+    /** 実行時刻欄の開かれ方（GUI仕様v2 §4.1）。NORMAL=欄分割ウィジェット／INSTANT=相対/絶対の1行入力。 */
+    public enum Mode { NORMAL, INSTANT }
+
     private final Clock clock;
 
     // ③-c/③-dから参照するため各入力欄をフィールドとして保持する
-    private final DateTimeField execTimeField = new DateTimeField();
+    // 型はExecTimeInput（④・通常/instantモードの差し替えseam）。実体はコンストラクタでmodeにより分岐
+    private final ExecTimeInput execTimeField;
     private final JTextField repeatField = new JTextField(20);
     private final JComboBox<Reminder.Priority> priorityCombo = new JComboBox<>(Reminder.Priority.values());
     private final JTextField commentField = new JTextField(20);
@@ -39,8 +43,13 @@ public class EditDialog extends JDialog {
     private boolean okPressed = false;
 
     public EditDialog(Frame owner, Reminder original, Clock clock) {
-        super(owner, "リマインダー編集", true);
+        this(owner, original, clock, Mode.NORMAL);
+    }
+
+    public EditDialog(Frame owner, Reminder original, Clock clock, Mode mode) {
+        super(owner, mode == Mode.INSTANT ? "instant 追加" : "リマインダー編集", true);
         this.clock = clock;
+        this.execTimeField = mode == Mode.INSTANT ? new InstantField(clock) : new DateTimeField();
 
         // 選択行の既存値、または新規/複製でMainWindowが用意したReminderの値を各欄へ流し込む。
         // fireAtは呼び出し側が必ず非nullで渡す（編集=既存値、新規/複製=現在日時・秒0丸め）
@@ -91,7 +100,7 @@ public class EditDialog extends JDialog {
         // ダイアログを開いた時点でカーソルは日欄で活性（§4.8）＝実キーボードフォーカスもそこへ当てる
         addWindowListener(new WindowAdapter() {
             @Override public void windowOpened(WindowEvent e) {
-                execTimeField.requestFocusInWindow();
+                execTimeField.getComponent().requestFocusInWindow();
             }
         });
 
@@ -122,11 +131,14 @@ public class EditDialog extends JDialog {
      * 何もしない＝ユーザーがスクロール中の位置を保つ（③-c-3の毎秒再計算での引き戻し防止）。
      */
     private void updatePreview() {
-        String preview = EditFormLogic.buildPreview(
-            execTimeField.getExecTimeText(),
-            repeatField.getText(),
-            LocalDateTime.now(clock),
-            HolidayCheck.NONE);
+        String help = execTimeField.getErrorHelp();
+        String preview = (help != null)
+            ? help
+            : EditFormLogic.buildPreview(
+                execTimeField.getExecTimeText(),
+                repeatField.getText(),
+                LocalDateTime.now(clock),
+                HolidayCheck.NONE);
         if (!preview.equals(previewArea.getText())) {
             previewArea.setText(preview);
             previewArea.setCaretPosition(0);
@@ -144,7 +156,7 @@ public class EditDialog extends JDialog {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(4, 4, 4, 4);
 
-        addRow(panel, gbc, 0, "実行時刻", execTimeField);
+        addRow(panel, gbc, 0, "実行時刻", execTimeField.getComponent());
         addRow(panel, gbc, 1, "繰り返し", repeatField);
         addRow(panel, gbc, 2, "優先度", priorityCombo);
         addRow(panel, gbc, 3, "コメント", commentField);
