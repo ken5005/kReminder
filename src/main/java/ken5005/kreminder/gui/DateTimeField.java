@@ -34,6 +34,7 @@ public class DateTimeField extends JPanel {
 
     private final EnumMap<DateField, JTextField> fields = new EnumMap<>(DateField.class);
     private final List<Runnable> listeners = new ArrayList<>();
+    private final List<Runnable> enterListeners = new ArrayList<>();
     private Color defaultBg;
     // setDateTime呼び出しまでは値未確定。コンストラクタではLocalDateTime.now()等を一切呼ばない
     private DateTimeFieldState state;
@@ -90,6 +91,11 @@ public class DateTimeField extends JPanel {
         listeners.add(listener);
     }
 
+    /** Enter押下のたびに呼ばれる（カーソル活性/無活性を問わない）。OK発火・警告音判断はEditDialog側の責務。 */
+    public void addEnterListener(Runnable listener) {
+        enterListeners.add(listener);
+    }
+
     private void addField(DateField field) {
         JTextField tf = new JTextField(field.width + FIELD_EXTRA_COLUMNS);
         tf.setEditable(false);
@@ -122,15 +128,34 @@ public class DateTimeField extends JPanel {
         for (int d = 0; d <= 9; d++) {
             int digit = d;
             String name = "typeDigit" + d;
-            bindKey(im, am, KeyEvent.VK_0 + d, name, () -> applyTransition(s -> DateTimeFieldLogic.typeDigit(s, digit)));
+            bindKey(im, am, KeyEvent.VK_0 + d, name, () -> typeDigitAndMaybeAdvance(digit));
             im.put(KeyStroke.getKeyStroke(KeyEvent.VK_NUMPAD0 + d, 0), name);
         }
         bindKey(im, am, KeyEvent.VK_LEFT, "moveLeft", () -> applyTransition(DateTimeFieldLogic::moveLeft));
         bindKey(im, am, KeyEvent.VK_RIGHT, "moveRight", () -> applyTransition(DateTimeFieldLogic::moveRight));
         bindKey(im, am, KeyEvent.VK_UP, "stepUp", () -> applyTransition(s -> DateTimeFieldLogic.stepUpDown(s, 1)));
         bindKey(im, am, KeyEvent.VK_DOWN, "stepDown", () -> applyTransition(s -> DateTimeFieldLogic.stepUpDown(s, -1)));
-        bindKey(im, am, KeyEvent.VK_SPACE, "space", () -> applyTransition(DateTimeFieldLogic::pressSpace));
+        bindKey(im, am, KeyEvent.VK_SPACE, "space", () -> {
+            applyTransition(DateTimeFieldLogic::pressSpace);
+            // 確定後は次のコンポーネント（＝繰り返し欄）へフォーカスを送る（v1.2）。
+            // 遷移先が誰かはウィジェットが知る必要はない
+            KeyboardFocusManager.getCurrentKeyboardFocusManager().focusNextComponent(this);
+        });
         bindKey(im, am, KeyEvent.VK_ENTER, "enter", this::handleEnter);
+    }
+
+    /**
+     * 数字打鍵。秒欄（右端）が満了するとカーソルが消滅する（DateTimeFieldLogic.typeDigit の
+     * nextField(SECOND) == null）。その場合は Space / Tab で抜けたときと同じく、
+     * 次のコンポーネント（＝繰り返し欄）へフォーカスを送って操作感を揃える（v1.2）。
+     * wasEditingを見るのは、カーソル無活性中の打鍵（typeDigitが無反応で返る）でフォーカスを飛ばさないため。
+     */
+    private void typeDigitAndMaybeAdvance(int digit) {
+        boolean wasEditing = isEditing();
+        applyTransition(s -> DateTimeFieldLogic.typeDigit(s, digit));
+        if (wasEditing && !isEditing()) {
+            KeyboardFocusManager.getCurrentKeyboardFocusManager().focusNextComponent(this);
+        }
     }
 
     private void bindKey(InputMap im, ActionMap am, int keyCode, String name, Runnable action) {
@@ -143,18 +168,14 @@ public class DateTimeField extends JPanel {
         });
     }
 
-    // カーソル活性中はEnterを消費して現欄を確定・カーソル消滅（OKは発火しない）。
-    // カーソル無活性中はデフォルトボタン（OK）へ委譲する＝Enter2回で登録完了
+    // カーソル活性中はまず現欄を確定・カーソル消滅させる（→ChangeListener経由でOK活性が最新化される）。
+    // カーソルの活性/無活性を問わず、確定処理のあと必ずenterListenersへ通知する（v1.2・Enter1回化）。
+    // OK発火するか警告音を鳴らすかの判断はEditDialog側の責務＝ここではrootPane/defaultButtonに触れない
     private void handleEnter() {
         if (state != null && state.cursor() != null) {
             applyTransition(DateTimeFieldLogic::pressEnter);
-            return;
         }
-        JRootPane root = getRootPane();
-        JButton defaultButton = root == null ? null : root.getDefaultButton();
-        if (defaultButton != null) {
-            defaultButton.doClick();
-        }
+        for (Runnable l : enterListeners) l.run();
     }
 
     private void setupMouseWheel() {
