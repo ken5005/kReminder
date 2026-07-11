@@ -63,6 +63,23 @@ public class ReminderTableModel extends AbstractTableModel {
         fireTableRowsUpdated(modelRow, modelRow);
     }
 
+    /**
+     * 新規/複製で作成したReminderをリスト末尾に追加し、行追加をJTableに通知する（GUI仕様v2 §2.5.1/2.5.2）。
+     * 戻り値は追加された行のモデル行インデックス（呼び出し側がsorter経由でビュー行へ変換して選択・スクロールに使う）。
+     */
+    public int addReminder(Reminder r) {
+        reminders.add(r);
+        int modelRow = reminders.size() - 1;
+        fireTableRowsInserted(modelRow, modelRow);
+        return modelRow;
+    }
+
+    /** 削除操作でモデルから該当行を除去し、行削除をJTableに通知する（GUI仕様v2 §2.5.4）。 */
+    public void removeReminderAt(int modelRow) {
+        reminders.remove(modelRow);
+        fireTableRowsDeleted(modelRow, modelRow);
+    }
+
     @Override
     public int getRowCount() {
         return reminders.size();

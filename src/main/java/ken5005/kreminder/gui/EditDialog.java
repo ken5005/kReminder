@@ -40,7 +40,8 @@ public class EditDialog extends JDialog {
         super(owner, "リマインダー編集", true);
         this.clock = clock;
 
-        // 選択行の既存値を各欄へ流し込む。編集パスのfireAtは非null（新規ボタンは未実装）
+        // 選択行の既存値、または新規/複製でMainWindowが用意したReminderの値を各欄へ流し込む。
+        // fireAtは呼び出し側が必ず非nullで渡す（編集=既存値、新規/複製=現在日時・秒0丸め）
         execTimeField.setDateTime(original.fireAt);
         repeatField.setText(original.repeat == null ? "" : original.repeat);
         priorityCombo.setSelectedItem(original.priority);

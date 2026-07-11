@@ -1,6 +1,7 @@
 package ken5005.kreminder.gui;
 
 import ken5005.kreminder.Config;
+import ken5005.kreminder.CopyName;
 import ken5005.kreminder.EditFormLogic;
 import ken5005.kreminder.FilterState;
 import ken5005.kreminder.Reminder;
@@ -13,7 +14,10 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.table.TableRowSorter;
 import java.awt.*;
+import java.awt.event.ActionEvent;
 import java.awt.event.HierarchyEvent;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.time.Clock;
@@ -83,6 +87,29 @@ public class MainWindow extends JFrame {
         // フィルタUI（buildTopBars）とテーブル/sorter（buildSplitPane）の両方が揃ってから
         // 初期フィルタを適用する。これをしないと起動直後は無フィルタ（全件表示）になってしまう。
         applyFilter();
+
+        // Ctrl+N/Ctrl+D は窓スコープ（GUI仕様v2 §2.5.6）。EditDialog等の別窓にフォーカスがある間は発火しない
+        setupWindowKeyBindings();
+    }
+
+    /**
+     * 新規(Ctrl+N)・複製(Ctrl+D)をウィンドウ全体のキーバインドとして登録する（GUI仕様v2 §2.5.6）。
+     * rootPaneのWHEN_IN_FOCUSED_WINDOWに置くことで、検索欄やテーブルなどフォーカス位置に関わらず効く。
+     * 別ウィンドウ（EditDialog・発火ポップアップ）にフォーカスが移っている間はこの窓の外なので発火しない。
+     */
+    private void setupWindowKeyBindings() {
+        var inputMap = getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        var actionMap = getRootPane().getActionMap();
+
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_N, InputEvent.CTRL_DOWN_MASK), "kreminder.new");
+        actionMap.put("kreminder.new", new AbstractAction() {
+            @Override public void actionPerformed(ActionEvent e) { onNewButton(); }
+        });
+
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_D, InputEvent.CTRL_DOWN_MASK), "kreminder.duplicate");
+        actionMap.put("kreminder.duplicate", new AbstractAction() {
+            @Override public void actionPerformed(ActionEvent e) { onDuplicateButton(); }
+        });
     }
 
     /** 上段=既存ツールバー・下段=フィルタバーの2段組みを1枚のパネルにまとめる。 */
@@ -100,13 +127,14 @@ public class MainWindow extends JFrame {
 
         for (String name : new String[]{"新規", "編集", "複製", "削除", "更新", "デバッグログ"}) {
             var btn = new JButton(name);
-            if (name.equals("デバッグログ")) {
-                btn.addActionListener(e -> toggleDebugPanel());
-            } else if (name.equals("編集")) {
-                btn.addActionListener(e -> onEditButton());
-            } else {
-                // 各ボタンの ActionListener はステータスバー更新＋DEBログ出力のみ（業務ロジックなし）
-                btn.addActionListener(e -> {
+            switch (name) {
+                case "デバッグログ" -> btn.addActionListener(e -> toggleDebugPanel());
+                case "編集" -> btn.addActionListener(e -> onEditButton());
+                case "新規" -> btn.addActionListener(e -> onNewButton());
+                case "複製" -> btn.addActionListener(e -> onDuplicateButton());
+                case "削除" -> btn.addActionListener(e -> onDeleteButton());
+                // 「更新」は今回もダミー配線のまま（スコープ外・GUI仕様v2 §2.5関連スライドで対応予定）
+                default -> btn.addActionListener(e -> {
                     statusBar.setText(name + " が押されました");
                     DEB.pr(name + " が押されました");
                 });
@@ -227,10 +255,125 @@ public class MainWindow extends JFrame {
         tableModel.reminderUpdatedAt(modelRow);
     }
 
+    /**
+     * 「新規」ボタン／Ctrl+N の導線（GUI仕様v2 §2.5.1）。
+     * 現在日時（秒0丸め）をfireAtに入れたReminderを用意し、共通の編集導線へ渡す。
+     */
+    private void onNewButton() {
+        Reminder r = new Reminder();
+        r.fireAt = LocalDateTime.now(clock).withSecond(0).withNano(0);
+        r.message = "";
+        openEditorForNew(r);
+    }
+
+    /**
+     * 「複製」ボタン／Ctrl+D の導線（GUI仕様v2 §2.5.2）。
+     * 選択行の全フィールドをコピーし、noticedはfalseにリセット・messageだけCopyNameで採番してから
+     * 共通の編集導線へ渡す。選択行が無ければ何もしない。
+     */
+    private void onDuplicateButton() {
+        int viewRow = table.getSelectedRow();
+        if (viewRow == -1) {
+            statusBar.setText("複製する行を選択してください");
+            return;
+        }
+        int modelRow = sorter.convertRowIndexToModel(viewRow);
+        Reminder original = tableModel.getReminderAt(modelRow);
+
+        Reminder copy = new Reminder();
+        copy.fireAt = original.fireAt;
+        copy.message = CopyName.nextCopyComment(original.message);
+        copy.priority = original.priority;
+        copy.action = original.action;
+        copy.repeat = original.repeat;
+        copy.noticed = false;
+
+        openEditorForNew(copy);
+    }
+
+    /**
+     * 新規・複製で共通の編集導線（GUI仕様v2 §2.5.1/2.5.2）。
+     * 渡されたReminder（まだreminders未追加）をEditDialogで開き、OKなら入力値を書き戻したうえで
+     * リストへ追加・保存・表示（選択+スクロール、フィルタで隠れる場合はメッセージ）を行う。
+     * キャンセル/Esc/×は何もしない＝reminders/JSONに一切影響を与えない。
+     */
+    private void openEditorForNew(Reminder r) {
+        var dialog = new EditDialog(this, r, clock);
+        dialog.setLocationRelativeTo(this);
+        dialog.setVisible(true);
+
+        if (!dialog.isOkPressed()) return; // キャンセル・Esc・×は追加しない
+
+        var parsed = EditFormLogic.parseExecTime(dialog.getExecTimeText());
+        if (parsed.isEmpty()) return; // OK活性で保証済みだが、書き戻し前に念のため再パース（防御的）
+
+        r.fireAt = parsed.get();
+        r.repeat = dialog.getRepeatText();
+        r.priority = dialog.getSelectedPriority();
+        r.message = dialog.getCommentText();
+        r.action = dialog.getCmdText();
+        r.noticed = false;
+
+        int modelRow = tableModel.addReminder(r);
+        store.save(reminders);
+        revealAddedRow(modelRow);
+    }
+
+    /**
+     * 追加した行をビュー上で選択・スクロールして見せる（GUI仕様v2 §2.5.5）。
+     * 現在のフィルタで非表示（convertRowIndexToViewが-1）の場合は、statusBarとDEBログの
+     * 両方にその旨を出す（追加自体は成功しているので、混乱を避けるため気づかせる）。
+     */
+    private void revealAddedRow(int modelRow) {
+        int viewRow = sorter.convertRowIndexToView(modelRow);
+        if (viewRow == -1) {
+            String message = "追加しましたが現在のフィルタでは非表示です";
+            statusBar.setText(message);
+            DEB.pr(message);
+            return;
+        }
+        table.setRowSelectionInterval(viewRow, viewRow);
+        table.scrollRectToVisible(table.getCellRect(viewRow, 0, true));
+    }
+
+    /**
+     * 「削除」ボタン／Delete キーの導線（GUI仕様v2 §2.5.4）。
+     * 選択行が無ければ何もしない。確認ダイアログで「はい」を選んだ場合のみ、
+     * リストから除去・保存・選択解除まで行う。
+     */
+    private void onDeleteButton() {
+        int viewRow = table.getSelectedRow();
+        if (viewRow == -1) {
+            statusBar.setText("削除する行を選択してください");
+            return;
+        }
+        int modelRow = sorter.convertRowIndexToModel(viewRow);
+        Reminder target = tableModel.getReminderAt(modelRow);
+        // messageはnull/空でありうる（新規未編集のまま複製・保存された等）。素の値をそのまま
+        // ダイアログに出すと「「null」を削除しますか？」になってしまうため、表示専用に補う
+        String label = (target.message == null || target.message.isEmpty())
+            ? "（コメントなし）"
+            : target.message;
+
+        int result = JOptionPane.showConfirmDialog(
+            this,
+            "「" + label + "」を削除しますか？",
+            "削除の確認",
+            JOptionPane.YES_NO_OPTION);
+        if (result != JOptionPane.YES_OPTION) return;
+
+        tableModel.removeReminderAt(modelRow);
+        store.save(reminders);
+        table.clearSelection();
+        statusBar.setText("削除しました");
+    }
+
     /** テーブルを組み立てる。reminders はコンストラクタで受け取った同一インスタンス（③-d）。 */
     private JScrollPane buildTable() {
         tableModel = new ReminderTableModel(reminders, clock);
         table = new JTable(tableModel);
+        // 複数選択は今回対象外（GUI仕様v2 §2.5）。新規/複製/削除は常に単一の対象行に対して働く
+        table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 
         sorter = new TableRowSorter<>(tableModel);
         table.setRowSorter(sorter);
@@ -256,8 +399,32 @@ public class MainWindow extends JFrame {
             }
         });
 
+        setupTableKeyBindings();
+
         // JScrollPane に載せないとヘッダ（列名）が表示されない — これは JTable の仕様
         return new JScrollPane(table);
+    }
+
+    /**
+     * テーブルにフォーカスがある時だけ効くキーバインド（GUI仕様v2 §2.5.6）。
+     * WHEN_FOCUSED に限定するのは、検索欄でのスペース入力・文字削除を殺さないため
+     * （WHEN_IN_FOCUSED_WINDOWにすると窓全体で奪ってしまう）。
+     * EnterはJTable既定の「次行へ移動」を上書きする形になる。
+     */
+    private void setupTableKeyBindings() {
+        var inputMap = table.getInputMap(JComponent.WHEN_FOCUSED);
+        var actionMap = table.getActionMap();
+
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_SPACE, 0), "kreminder.edit");
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "kreminder.edit");
+        actionMap.put("kreminder.edit", new AbstractAction() {
+            @Override public void actionPerformed(ActionEvent e) { onEditButton(); }
+        });
+
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_DELETE, 0), "kreminder.delete");
+        actionMap.put("kreminder.delete", new AbstractAction() {
+            @Override public void actionPerformed(ActionEvent e) { onDeleteButton(); }
+        });
     }
 
     /**
