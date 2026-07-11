@@ -23,7 +23,7 @@ import java.util.function.UnaryOperator;
  * DateTimeFieldLogic（純関数コア）の薄いSwing配線。業務判断（打鍵解釈・確定・クランプ等）は
  * 一切ここに置かず、すべてLogic側の遷移関数に委譲する。
  */
-public class DateTimeField extends JPanel {
+public class DateTimeField extends JPanel implements ExecTimeInput {
 
     private static final Color ACTIVE_BG = new Color(200, 220, 255);
 
@@ -94,6 +94,18 @@ public class DateTimeField extends JPanel {
     /** Enter押下のたびに呼ばれる（カーソル活性/無活性を問わない）。OK発火・警告音判断はEditDialog側の責務。 */
     public void addEnterListener(Runnable listener) {
         enterListeners.add(listener);
+    }
+
+    /** ExecTimeInput契約：EditDialogがレイアウトに置く実体は自分自身。 */
+    @Override
+    public JComponent getComponent() {
+        return this;
+    }
+
+    /** ExecTimeInput契約：DateTimeFieldは不正値もそのまま保持・表示するだけで文法エラー説明を持たない。 */
+    @Override
+    public String getErrorHelp() {
+        return null;
     }
 
     private void addField(DateField field) {
