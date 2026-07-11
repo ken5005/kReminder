@@ -93,7 +93,7 @@ public class MainWindow extends JFrame {
     }
 
     /**
-     * 新規(Ctrl+N)・複製(Ctrl+D)をウィンドウ全体のキーバインドとして登録する（GUI仕様v2 §2.5.6）。
+     * 新規(Ctrl+N)・複製(Ctrl+D)・instant(Ctrl+I)をウィンドウ全体のキーバインドとして登録する（GUI仕様v2 §2.5.6）。
      * rootPaneのWHEN_IN_FOCUSED_WINDOWに置くことで、検索欄やテーブルなどフォーカス位置に関わらず効く。
      * 別ウィンドウ（EditDialog・発火ポップアップ）にフォーカスが移っている間はこの窓の外なので発火しない。
      */
@@ -110,6 +110,11 @@ public class MainWindow extends JFrame {
         actionMap.put("kreminder.duplicate", new AbstractAction() {
             @Override public void actionPerformed(ActionEvent e) { onDuplicateButton(); }
         });
+
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_I, InputEvent.CTRL_DOWN_MASK), "kreminder.instant");
+        actionMap.put("kreminder.instant", new AbstractAction() {
+            @Override public void actionPerformed(ActionEvent e) { onInstantButton(); }
+        });
     }
 
     /** 上段=既存ツールバー・下段=フィルタバーの2段組みを1枚のパネルにまとめる。 */
@@ -125,12 +130,13 @@ public class MainWindow extends JFrame {
         var bar = new JToolBar();
         bar.setFloatable(false); // ドラッグで切り離せないようにする（常設ツールバーの慣用）
 
-        for (String name : new String[]{"新規", "編集", "複製", "削除", "更新", "デバッグログ"}) {
+        for (String name : new String[]{"新規", "instant", "編集", "複製", "削除", "更新", "デバッグログ"}) {
             var btn = new JButton(name);
             switch (name) {
                 case "デバッグログ" -> btn.addActionListener(e -> toggleDebugPanel());
                 case "編集" -> btn.addActionListener(e -> onEditButton());
                 case "新規" -> btn.addActionListener(e -> onNewButton());
+                case "instant" -> btn.addActionListener(e -> onInstantButton());
                 case "複製" -> btn.addActionListener(e -> onDuplicateButton());
                 case "削除" -> btn.addActionListener(e -> onDeleteButton());
                 // 「更新」は今回もダミー配線のまま（スコープ外・GUI仕様v2 §2.5関連スライドで対応予定）
@@ -263,7 +269,19 @@ public class MainWindow extends JFrame {
         Reminder r = new Reminder();
         r.fireAt = LocalDateTime.now(clock).withSecond(0).withNano(0);
         r.message = "";
-        openEditorForNew(r);
+        openEditorForNew(r, EditDialog.Mode.NORMAL);
+    }
+
+    /**
+     * 「instant」ボタン／Ctrl+I／テーブルSpaceの導線（GUI仕様v2 §4.1・クイック追加）。
+     * 選択行の有無に関係なく開く。fireAtの初期値はonNewButtonと同じ現在日時(秒0丸め)を入れるが、
+     * InstantField.setDateTimeはno-op（instantは空欄スタート仕様）なので実質使われない。
+     */
+    private void onInstantButton() {
+        Reminder r = new Reminder();
+        r.fireAt = LocalDateTime.now(clock).withSecond(0).withNano(0);
+        r.message = "";
+        openEditorForNew(r, EditDialog.Mode.INSTANT);
     }
 
     /**
@@ -288,17 +306,17 @@ public class MainWindow extends JFrame {
         copy.repeat = original.repeat;
         copy.noticed = false;
 
-        openEditorForNew(copy);
+        openEditorForNew(copy, EditDialog.Mode.NORMAL);
     }
 
     /**
-     * 新規・複製で共通の編集導線（GUI仕様v2 §2.5.1/2.5.2）。
+     * 新規・複製・instantで共通の編集導線（GUI仕様v2 §2.5.1/2.5.2/④）。
      * 渡されたReminder（まだreminders未追加）をEditDialogで開き、OKなら入力値を書き戻したうえで
      * リストへ追加・保存・表示（選択+スクロール、フィルタで隠れる場合はメッセージ）を行う。
      * キャンセル/Esc/×は何もしない＝reminders/JSONに一切影響を与えない。
      */
-    private void openEditorForNew(Reminder r) {
-        var dialog = new EditDialog(this, r, clock);
+    private void openEditorForNew(Reminder r, EditDialog.Mode mode) {
+        var dialog = new EditDialog(this, r, clock, mode);
         dialog.setLocationRelativeTo(this);
         dialog.setVisible(true);
 
@@ -410,15 +428,20 @@ public class MainWindow extends JFrame {
      * WHEN_FOCUSED に限定するのは、検索欄でのスペース入力・文字削除を殺さないため
      * （WHEN_IN_FOCUSED_WINDOWにすると窓全体で奪ってしまう）。
      * EnterはJTable既定の「次行へ移動」を上書きする形になる。
+     * Spaceはinstant起動（④）に割り当て、選択行の有無に関係なく開く（onInstantButton自体が無選択を許容する）。
      */
     private void setupTableKeyBindings() {
         var inputMap = table.getInputMap(JComponent.WHEN_FOCUSED);
         var actionMap = table.getActionMap();
 
-        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_SPACE, 0), "kreminder.edit");
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "kreminder.edit");
         actionMap.put("kreminder.edit", new AbstractAction() {
             @Override public void actionPerformed(ActionEvent e) { onEditButton(); }
+        });
+
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_SPACE, 0), "kreminder.instant");
+        actionMap.put("kreminder.instant", new AbstractAction() {
+            @Override public void actionPerformed(ActionEvent e) { onInstantButton(); }
         });
 
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_DELETE, 0), "kreminder.delete");
