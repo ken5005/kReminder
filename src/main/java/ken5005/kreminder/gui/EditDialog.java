@@ -47,7 +47,16 @@ public class EditDialog extends JDialog {
     }
 
     public EditDialog(Frame owner, Reminder original, Clock clock, Mode mode) {
-        super(owner, mode == Mode.INSTANT ? "instant 追加" : "リマインダー編集", true);
+        // モーダル型はAPPLICATION_MODAL（旧: true）ではなくDOCUMENT_MODALにする。
+        // APPLICATION_MODALだと「owner=nullの発火ポップアップ（Main.showPopupがnew JDialog((Frame) null, ...)
+        // で生成＝Swingが割り当てる共有隠しフレームが根）」までブロック対象にしてしまい、
+        // 編集ダイアログを開いている間はポップアップが表示されてもOKが押せなくなる（入力が死ぬ）。
+        // DOCUMENT_MODALなら「自分の一族（ownerを辿った先の根＝MainWindow）」だけがブロック対象になるので、
+        // MainWindowは従来どおり編集中ブロックされ（編集中の行が消える事故を防ぐ）、
+        // 別の根に属する発火ポップアップは生きたまま操作できる。
+        // 二度とtrueに戻さないこと（戻すとこの不具合が再発する）。
+        super(owner, mode == Mode.INSTANT ? "instant 追加" : "リマインダー編集",
+                Dialog.ModalityType.DOCUMENT_MODAL);
         this.clock = clock;
         this.execTimeField = mode == Mode.INSTANT ? new InstantField(clock) : new DateTimeField();
 
