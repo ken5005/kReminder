@@ -169,7 +169,7 @@ public static Map<String, File> build(List<File> wavFiles, Map<String, String> t
 
 (a) dangling ／ (b) 重複キー ／ (c) 衝突 ／ (d) 不正行 ／ (e) sound-map の読込 I/O 失敗
 
-※これは**設定ミス＝起動時**の話。実行中の未知音声名（`SND.play("typo")`）は "ごん" フォールバック＝graceful（→§9）。
+※これは**設定ミス＝起動時**の話。実行中の未知音声名（`SND.play("typo")`）は "Oops" フォールバック＝graceful（→§9）。
 
 **`gui/FatalErrorDialog`**：`static showAndExit(String)`＝EDT 安全（非EDTは `invokeAndWait` で包む）→ JOptionPane(ERROR) → `exit(1)`。親 `null` だと共有隠しフレームが親になり他アプリの背後に隠れる（「無言で起動失敗」と同じ体験に堕ちる）ため、**一時的な `alwaysOnTop`＋`undecorated` フレームを可視化して親にする**。汎用ヘルパーだが現在の配線先は sound-map のみ（常駐窓がある実行中エラーに使う時はその窓を親にすれば owner 生成不要＝Javadoc 記載）。
 
@@ -178,7 +178,7 @@ public static Map<String, File> build(List<File> wavFiles, Map<String, String> t
 - `sound-map.properties` が**無いときだけ**、`renderTemplate` の内容を UTF-8 で書き出す。
 - **生成はこの一度きり・以後アプリは一切書き換えない**（後から増えた wav はテーブルに無ければ stem 自動で鳴る。音声名を付けたければ手動追加）。
 - 生成した回はテーブル空扱いで先へ進む（＝全 stem 自動＝生成内容と同義・生成直後の読み直しはしない）。書込失敗は DEB 警告してテーブル空で続行（graceful）。
-- 実ファイル一覧はテンプレ生成で得られるため、v1 §6.2 の一覧表は本仕様から廃止。フォールバック音は "ごん"（固定・小文字）。
+- 実ファイル一覧はテンプレ生成で得られるため、v1 §6.2 の一覧表は本仕様から廃止。フォールバック音は "Oops"（`SoundWorker.FALLBACK_NAME` で固定・音声名の解決は大小区別）。
 
 ---
 
@@ -188,8 +188,8 @@ public static Map<String, File> build(List<File> wavFiles, Map<String, String> t
 
 | 状況 | 処理 |
 |---|---|
-| 未知の音声名 | `DEB.pr(new RuntimeException("未定義の音声名: " + name))` + "ごん" でフォールバック再生 |
-| "ごん" 自体がマップに無い | `DEB.pr(new RuntimeException("音声ファイルが無い: ごん.wav"))` + スキップ |
+| 未知の音声名 | `DEB.pr(new RuntimeException("未定義の音声名: " + name))` + "Oops" でフォールバック再生 |
+| "Oops" 自体がマップに無い | `DEB.pr(new RuntimeException("音声ファイルが無い: Oops.wav"))` + スキップ |
 | 再生中に例外 | 例外を呑んで `DEB.pr(e)` + 次のリクエストへ進む |
 | キュー満杯（30件超） | drop + `DEB.pr` の文字列ログ |
 | volume 範囲外 | clamp(0.0f, 1.0f) + `DEB.pr` で warn |

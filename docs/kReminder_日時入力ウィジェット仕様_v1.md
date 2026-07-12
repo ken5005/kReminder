@@ -63,8 +63,8 @@ public void addChangeListener(Runnable l)   // 値変化通知（旧 DocumentLis
 
 ### 3.5 確定操作
 
-- **Enter**（v1.2 改訂・chat38）＝現欄の未完バッファをゼロ埋め確定しカーソル消滅。**そのまま OK を発火して登録完了**（v1.1 までの「Enter 2回で登録完了」は廃止＝1回で完結する）。ただし OK が非活性（入力不正・§6）なら登録せず `SND.play("GON")` で警告音を鳴らす。
-  - **Enter の一元化**（v1.2・chat38）＝Enter は EditDialog の rootPane（`WHEN_IN_FOCUSED_WINDOW`）でも握り、**実行時刻欄以外（繰り返し・コメント・Cmd）で押しても同じ挙動**にする（OK 活性なら登録／非活性なら「ごん」）。※優先度コンボは Swing 側が Enter を消費するため対象外（従来どおり）。
+- **Enter**（v1.2 改訂・chat38）＝現欄の未完バッファをゼロ埋め確定しカーソル消滅。**そのまま OK を発火して登録完了**（v1.1 までの「Enter 2回で登録完了」は廃止＝1回で完結する）。ただし OK が非活性（入力不正・§6）なら登録せず `SND.play("Oops")` で警告音を鳴らす。
+  - **Enter の一元化**（v1.2・chat38）＝Enter は EditDialog の rootPane（`WHEN_IN_FOCUSED_WINDOW`）でも握り、**実行時刻欄以外（繰り返し・コメント・Cmd）で押しても同じ挙動**にする（OK 活性なら登録／非活性なら「Oops」）。※優先度コンボは Swing 側が Enter を消費するため対象外（従来どおり）。
 - **Space**（v1.2 改訂・chat38）＝カーソル欄のバッファ状態で分岐（chat32 の目視で改訂した仕様、分岐自体は変更なし）：
   - **バッファ活性中**（打ちかけがある）→ 打ちかけをゼロ埋め確定して現欄の値は活かし、**下位の欄だけ**を最小値にして確定・カーソル消滅。
   - **バッファ非活性**（欄に居るがまだ何も打っていない＝再進入直後や自動送り直後）→ **現欄を含めて**最小値にして確定・カーソル消滅。
@@ -120,7 +120,7 @@ public void addChangeListener(Runnable l)   // 値変化通知（旧 DocumentLis
 - **`stepUpDown` は増減前に `isValid` を門番に置く**：`adjustDay/Month/Year` は妥当状態しか受けない＝「2月31日で日を弄る」類の事故が構造的に起きない。
 - **「新規＝現在日時」デフォルトは、新規/複製/削除スライスで確定・実装した（v1.1）**。当初想定していた「`DateTimeField` にコンストラクタで `Clock` を注入する」案は採らなかった＝ウィジェット・`DateTimeFieldLogic` とも clock-free のまま無改造。代わりに呼び出し側（`MainWindow`）が `LocalDateTime.now(clock).withSecond(0).withNano(0)` を計算して `new Reminder()` の `fireAt` にセットし、`EditDialog` 経由で `execTimeField.setDateTime(...)` に渡す形にした＝コアの clock-free 原則（本節冒頭）はそのまま維持される。
 - セパレータは `-` / `:`（`/` ではない）。chat32 目視での「/ のはず」は思い込みの見間違いで、変更なし。
-- **Enter 1回化（v1.2・chat38）は「OK が押せない時に無反応だとユーザーが気づけない」問題を、SND の警告音（`"GON"`＝ごん.wav）で解決した**。`DateTimeField` 自身は `SND` を import せず、Enter 押下を `addEnterListener(Runnable)` で `EditDialog` に通知するだけ＝ウィジェットは音を知らない（疎結合維持）。音を鳴らすか・OK を発火するかの判断は `EditDialog.onEnterPressed()` の責務。
+- **Enter 1回化（v1.2・chat38）は「OK が押せない時に無反応だとユーザーが気づけない」問題を、SND の警告音（`"Oops"`）で解決した**。`DateTimeField` 自身は `SND` を import せず、Enter 押下を `addEnterListener(Runnable)` で `EditDialog` に通知するだけ＝ウィジェットは音を知らない（疎結合維持）。音を鳴らすか・OK を発火するかの判断は `EditDialog.onEnterPressed()` の責務。
 
 ---
 
