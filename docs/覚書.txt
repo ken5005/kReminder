@@ -89,11 +89,11 @@ git status(git st)の１行目にも出てるが
 
 Mainを実行するなら
 .\gradlew shadowJar
-java -jar build\libs\kReminder-0.3.2-all.jar
+java -jar build\libs\kReminder-0.6.1-all.jar
 
 Main以外を実行するなら
 .\gradlew shadowJar
-java -cp build/libs/kReminder-0.3.2-all.jar ken5005.kreminder.gui.MainWindow
+java -cp build/libs/kReminder-0.6.1-all.jar ken5005.kreminder.gui.MainWindow
 
 
 PowerShellでは%APPDATA%は展開されない。$env:APPDATAを使う
