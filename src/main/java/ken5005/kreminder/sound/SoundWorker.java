@@ -19,7 +19,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class SoundWorker extends Thread {
 
     private static final int QUEUE_CAPACITY = 30;
-    private static final String FALLBACK_NAME = "ごん";
+    private static final String FALLBACK_NAME = "Oops";
 
     private final LinkedBlockingQueue<SoundRequest> queue = new LinkedBlockingQueue<>(QUEUE_CAPACITY);
     private final Map<String, File> soundMap;

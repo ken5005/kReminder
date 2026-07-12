@@ -205,7 +205,7 @@ public class EditDialog extends JDialog {
         if (okButton.isEnabled()) {
             okButton.doClick();
         } else {
-            SND.play("GON");
+            SND.play("Oops");
         }
     }
 
