@@ -2,6 +2,7 @@ package ken5005.kreminder.sound;
 
 import ken5005.kreminder.debug.DEB;
 
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -28,27 +29,43 @@ public final class Notifier {
 
     private static void run(NotifyPattern pattern, AtomicBoolean stopRequested) {
         try {
-            long deadline = pattern.loop() && pattern.maxDuration() != null
+            long deadline = pattern.maxDuration() != null
                     ? System.currentTimeMillis() + pattern.maxDuration().toMillis()
                     : Long.MAX_VALUE;
-            do {
-                for (NotifyStep step : pattern.steps()) {
-                    if (stopRequested.get()) return;
-                    SND.play(step.soundName(), step.volume());
-                    if (!sleepSliced(step.delayAfterMs(), stopRequested)) return;
+
+            // (1) steps を頭から1回流す
+            for (NotifyStep step : pattern.steps()) {
+                if (stopRequested.get() || System.currentTimeMillis() >= deadline) return;
+                SND.play(step.soundName(), step.volume());
+                if (!sleepSliced(step.delayAfterMs(), stopRequested, deadline)) return;
+            }
+
+            // (2) repeatTail>0 なら steps の末尾 repeatTail 個のサイクルを stop/deadline まで繰り返す
+            if (pattern.repeatTail() > 0) {
+                List<NotifyStep> tail = pattern.steps()
+                        .subList(pattern.steps().size() - pattern.repeatTail(), pattern.steps().size());
+                while (!stopRequested.get() && System.currentTimeMillis() < deadline) {
+                    for (NotifyStep step : tail) {
+                        if (stopRequested.get() || System.currentTimeMillis() >= deadline) return;
+                        SND.play(step.soundName(), step.volume());
+                        if (!sleepSliced(step.delayAfterMs(), stopRequested, deadline)) return;
+                    }
                 }
-            } while (pattern.loop() && !stopRequested.get() && System.currentTimeMillis() < deadline);
+            }
         } catch (Exception e) {
             // デバッグ機能・サブシステムの異常で本体を止めない、という全体方針の延長
             DEB.pr(e);
         }
     }
 
-    /** 待ちをSLEEP_SLICE_MS刻みに割って毎回stopフラグを見る。stopで抜けたらfalseを返す。 */
-    private static boolean sleepSliced(long totalMs, AtomicBoolean stopRequested) {
+    /**
+     * 待ちをSLEEP_SLICE_MS刻みに割って毎回stopフラグとdeadlineの両方を見る。
+     * どちらかに達したら（＝待ちの途中でも）打ち切ってfalseを返す。
+     */
+    private static boolean sleepSliced(long totalMs, AtomicBoolean stopRequested, long deadline) {
         long remaining = totalMs;
         while (remaining > 0) {
-            if (stopRequested.get()) return false;
+            if (stopRequested.get() || System.currentTimeMillis() >= deadline) return false;
             long slice = Math.min(SLEEP_SLICE_MS, remaining);
             try {
                 Thread.sleep(slice);
@@ -58,6 +75,6 @@ public final class Notifier {
             }
             remaining -= slice;
         }
-        return !stopRequested.get();
+        return !stopRequested.get() && System.currentTimeMillis() < deadline;
     }
 }

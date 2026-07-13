@@ -6,6 +6,8 @@ import ken5005.kreminder.debug.FileSink;
 import ken5005.kreminder.gui.FatalErrorDialog;
 import ken5005.kreminder.gui.MainWindow;
 import ken5005.kreminder.gui.PanelSink;
+import ken5005.kreminder.gui.PopupBehavior;
+import ken5005.kreminder.gui.PopupBehaviors;
 import ken5005.kreminder.holiday.HolidayLog;
 import ken5005.kreminder.holiday.HolidayOverride;
 import ken5005.kreminder.holiday.HolidayService;
@@ -14,6 +16,7 @@ import ken5005.kreminder.holiday.HolidayStatus;
 import ken5005.kreminder.holiday.OverlayHolidayCheck;
 import ken5005.kreminder.sound.NotifyHandle;
 import ken5005.kreminder.sound.NotifyPatterns;
+import ken5005.kreminder.sound.NotifyStep;
 import ken5005.kreminder.sound.Notifier;
 import ken5005.kreminder.sound.SND;
 import ken5005.kreminder.sound.SoundMapBuilder;
@@ -62,13 +65,25 @@ public class Main {
     private static MainWindow window;
 
     // ポップアップ同時表示の上限。全処理が EDT 一本なのでカウンタの同期は不要
-    private static final int MAX_POPUPS = 10;
+    private static final int MAX_POPUPS = 20;
     // 位置ずらしの1回あたりオフセット(px)。動作確認時に折り返しを見るため値を変えられるよう定数化
     private static final int POPUP_OFFSET = 105;
 
     private static final Deque<Reminder> popupQueue = new ArrayDeque<>();
-    private static int openPopupCount = 0;
     private static Point nextPopupLocation; // null = 次の1枚は画面中央に配置
+
+    /** 開いている発火ポップアップ1件分＝priorityを見るためのReminderと、実体のJDialog。 */
+    private record PopupEntry(Reminder reminder, JDialog dialog) {
+    }
+
+    // 現在開いているポップアップ一覧（開いた順）。同時発火時の交通整理（GUI仕様v2 §5.5）は
+    // このリストから引く。openPopups.size() が同時表示枚数そのものなので、旧 openPopupCount は廃止。
+    // notifyingEntry/notifyingHandle は「継続音を鳴らしている担当」の1件を指す（無ければ両方null）。
+    // 全処理がEDT上（Swing Timer・ボタンリスナ・windowClosedはすべてEDTから呼ばれる）で走るため、
+    // これらのフィールドへのアクセスに同期は不要。
+    private static final List<PopupEntry> openPopups = new ArrayList<>();
+    private static PopupEntry notifyingEntry;
+    private static NotifyHandle notifyingHandle;
 
     public static void main(String[] args) {
         boolean fakeClockUsed = false;
@@ -265,9 +280,8 @@ public class Main {
 
     /** 待ち行列から枚数上限まで補充してポップアップを開く。ポップアップが閉じた側からも呼ばれる。 */
     private static void pumpPopups() {
-        while (openPopupCount < MAX_POPUPS && !popupQueue.isEmpty()) {
+        while (openPopups.size() < MAX_POPUPS && !popupQueue.isEmpty()) {
             Reminder r = popupQueue.poll();
-            openPopupCount++;
             showPopup(r);
         }
     }
@@ -321,10 +335,41 @@ public class Main {
             + "（override +" + loadedOverride.addCount() + "/-" + loadedOverride.removeCount() + "）";
     }
 
+    /** priorityがnull（旧JSON防御）ならPri3相当として扱う。ordinalが大きいほど優先度が高い（Pri5が最高）。 */
+    private static int priorityRank(Reminder r) {
+        Reminder.Priority p = r.priority != null ? r.priority : Reminder.Priority.Pri3;
+        return p.ordinal();
+    }
+
+    /**
+     * 「開いているポップアップのうち priority が最も高いエントリが、継続音の担当である」という
+     * 不変条件をここに集約する（GUI仕様v2 §5.5）。showPopup・windowClosedの両方から呼ばれる。
+     * 同率なら先着優先＝リストは開いた順に並んでいるので、先頭から見て「厳密に上回った時だけ」
+     * 更新すれば自然に先着優先になる。
+     */
+    private static void retuneNotification() {
+        if (openPopups.isEmpty()) {
+            if (notifyingHandle != null) notifyingHandle.stop();
+            notifyingEntry = null;
+            notifyingHandle = null;
+            return;
+        }
+
+        PopupEntry best = openPopups.get(0);
+        for (PopupEntry entry : openPopups) {
+            if (priorityRank(entry.reminder()) > priorityRank(best.reminder())) {
+                best = entry;
+            }
+        }
+        if (best == notifyingEntry) return; // 既に担当なら鳴らし直さない
+
+        if (notifyingHandle != null) notifyingHandle.stop();
+        notifyingEntry = best;
+        notifyingHandle = Notifier.start(NotifyPatterns.forPriority(best.reminder().priority));
+    }
+
     private static void showPopup(Reminder r) {
-        // priorityに応じた「鳴らし方」で通知を開始する（GUI仕様v2 §5.1/5.2）。実際に音を出すのは
-        // 既存のSoundWorkerのままで、ここはNotifierに委譲するだけ＝EDTを止めない
-        NotifyHandle notify = Notifier.start(NotifyPatterns.forPriority(r.priority));
+        PopupBehavior behavior = PopupBehaviors.forPriority(r.priority);
 
         // 非モーダル化: モーダルのままだと setVisible(true) が EDT をブロックし、
         // ポップアップ表示中に1秒 Timer（残り時間表示・編集）が全部止まってしまう
@@ -340,24 +385,26 @@ public class Main {
         JButton ok = new JButton("OK");
         ok.addActionListener(e -> dialog.dispose());
 
-        // Extend（＝スヌーズ）: instant編集ダイアログを開き、OKで実際に登録できたときだけ
-        // このポップアップを閉じる（GUI仕様v2 §5.3）。キャンセル/Esc/×なら通知は消さずポップアップを残す。
-        // instant側もalwaysOnTopなので、開いている間だけ自分（張本人のポップアップ）は最前面を降りる
-        // ＝そうしないと2つのalwaysOnTop窓が被り、instant側が背後に隠れて読めなくなる
-        JButton extend = new JButton("Extend");
-        extend.addActionListener(e -> {
-            dialog.setAlwaysOnTop(false);
-            boolean added = window.openExtendEditor(r);
-            if (added) {
-                dialog.dispose();
-            } else {
-                dialog.setAlwaysOnTop(true); // キャンセルなら最前面に復帰
-            }
-        });
-
         JPanel south = new JPanel();
         south.add(ok);
-        south.add(extend);
+        // showExtend=false（Pri1）ならExtendボタンはそもそも生成・配置しない＝OKのみ（GUI仕様v2 §5.1）
+        if (behavior.showExtend()) {
+            // Extend（＝スヌーズ）: instant編集ダイアログを開き、OKで実際に登録できたときだけ
+            // このポップアップを閉じる（GUI仕様v2 §5.3）。キャンセル/Esc/×なら通知は消さずポップアップを残す。
+            // instant側もalwaysOnTopなので、開いている間だけ自分（張本人のポップアップ）は最前面を降りる
+            // ＝そうしないと2つのalwaysOnTop窓が被り、instant側が背後に隠れて読めなくなる
+            JButton extend = new JButton("Extend");
+            extend.addActionListener(e -> {
+                dialog.setAlwaysOnTop(false);
+                boolean added = window.openExtendEditor(r);
+                if (added) {
+                    dialog.dispose();
+                } else {
+                    dialog.setAlwaysOnTop(true); // キャンセルなら最前面に復帰
+                }
+            });
+            south.add(extend);
+        }
         dialog.add(south, BorderLayout.SOUTH);
 
         dialog.pack();
@@ -365,14 +412,41 @@ public class Main {
         placePopup(dialog);
         dialog.setAlwaysOnTop(true);
 
+        // 自動消滅（Pri1のみ・autoCloseAfterが非null）: 単発Timerでdispose()する。
+        // ダイアログがOK等で先に閉じられた場合に備え、windowClosedでTimerをstopする（生き残り防止）
+        Timer autoCloseTimer;
+        if (behavior.autoCloseAfter() != null) {
+            autoCloseTimer = new Timer((int) behavior.autoCloseAfter().toMillis(), e -> dialog.dispose());
+            autoCloseTimer.setRepeats(false);
+            autoCloseTimer.start();
+        } else {
+            autoCloseTimer = null;
+        }
+
+        // 一覧に加えてから交通整理（GUI仕様v2 §5.5）。自分が担当にならなかった場合に限り、
+        // 新着に気づけるよう自分のパターンの第1ステップだけを1回鳴らす（継続音は鳴らさない）
+        PopupEntry entry = new PopupEntry(r, dialog);
+        openPopups.add(entry);
+        retuneNotification();
+        if (notifyingEntry != entry) {
+            NotifyStep firstStep = NotifyPatterns.forPriority(r.priority).steps().get(0);
+            SND.play(firstStep.soundName(), firstStep.volume());
+        }
+
         // OK（dispose()）・Extend（OK登録時のdispose()）・×（DISPOSE_ON_CLOSE）のどれで閉じても
         // windowClosed が発火するので、通知停止と枚数カウンタの後処理をここに一本化する
         dialog.addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosed(WindowEvent e) {
-                notify.stop();
-                openPopupCount--;
-                if (openPopupCount == 0) nextPopupLocation = null; // 全部閉じたら次の1枚目はまた中央から
+                if (autoCloseTimer != null) autoCloseTimer.stop();
+                openPopups.remove(entry);
+                if (notifyingEntry == entry) {
+                    notifyingHandle.stop();
+                    notifyingEntry = null;
+                    notifyingHandle = null;
+                }
+                retuneNotification(); // 残っている最優先のポップアップが頭から鳴り始める
+                if (openPopups.isEmpty()) nextPopupLocation = null; // 全部閉じたら次の1枚目はまた中央から
                 pumpPopups();
             }
         });
