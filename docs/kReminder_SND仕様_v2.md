@@ -1,8 +1,10 @@
-# kReminder 音声サブシステム仕様書 v2.1
+# kReminder 音声サブシステム仕様書 v2.2
 
-最終更新: 2026-07-13（⑤ポップアップ配線）
+最終更新: 2026-07-13（通知拡張PR）
 v1.0 からの変更＝chat33 実装時の確定事項（音量モデル）＋ chat35 の sound-map 一式を現況化。
 v2.0 からの変更＝⑤ポップアップ配線スライスで追加した「通知パターン（Pri ↔ 鳴らし方）」（§11）を反映。
+v2.1 からの変更＝通知拡張PRで `NotifyPattern` を「単純ループ」から「頭出し＋末尾サイクル」の
+シグネチャに改訂し、Pri1〜Pri5 の確定シーケンスを§11.2 の表に反映。
 
 ---
 
@@ -241,7 +243,7 @@ public static Map<String, File> build(List<File> wavFiles, Map<String, String> t
 
 ```java
 public record NotifyStep(String soundName, float volume, long delayAfterMs) {}
-public record NotifyPattern(List<NotifyStep> steps, boolean loop, Duration maxDuration) {}
+public record NotifyPattern(List<NotifyStep> steps, int repeatTail, Duration maxDuration) {}
 
 public static NotifyPattern NotifyPatterns.forPriority(Reminder.Priority p)
 
@@ -250,15 +252,36 @@ public void NotifyHandle.stop()                        // 冪等
 public boolean NotifyHandle.awaitTermination(long ms)   // テスト用
 ```
 
+**`NotifyPattern` の意味（通知拡張PRで確定）**：`steps` を頭から順に1回流す → `repeatTail > 0`
+なら `steps` の**末尾 `repeatTail` 個のサイクル**を、以降 `stop()` されるか `maxDuration` に達する
+まで繰り返す。`repeatTail = 0` は繰り返さない（頭出し分を1回流して終わり）。`repeatTail` は
+0以上 `steps.size()` 以下（違反はコンストラクタで `IllegalArgumentException`）。`maxDuration` が
+`null` かつ `repeatTail > 0` は「`stop()` されるまで永久に鳴り続ける」を意味する。
+
 - `NotifyPatterns.forPriority` は Pri-1〜Pri-5 を switch で明示的に分岐する（将来ここだけ書き換えられるように、まとめて default に潰さない）。`p` が null のときも既定パターンを返す（旧 JSON 防御）。
-- ⑤時点は全 priority 共通で `new NotifyPattern(List.of(new NotifyStep("Standard", 1.0f, 0)), false, null)`。将来 Pri-5 を「0.5で鳴らす→500ms休む→1.0で鳴らす→…をループ、最大90分」に変えるときは、この表だけ書き換えれば `Notifier` も呼び出し元（Main）も触らずに済む。
+- **確定シーケンス（通知拡張PR・音量はすべて 1.0＝音の大小は wav 自体で表現）**：
+
+| Pri | ステップ列（`(音, 待ち)` の並び） | repeatTail | maxDuration |
+|---|---|---|---|
+| Pri1 | `(Small, -)` ×1 | 0（繰り返しなし） | null |
+| Pri2 | `(Notify, 10秒)` ×1 | 1（そのまま繰り返す） | 5分 |
+| Pri3 | `(Standard, 5秒)` ×1 | 1（そのまま繰り返す） | 10分 |
+| Pri4 | `(Standard, 0.5秒)`×3 → `(Standard, 5秒)`×3 → `(Watchout, 5秒)`×10 → `(Watchout, 60秒)`×1 | 1（末尾の `Watchout(60秒)` だけ繰り返す） | 2時間 |
+| Pri5 | `(Standard, 0.5秒)`×5 → `(Watchout, 5秒)`×10 → `(Serious, 60秒)`×1 | 1（末尾の `Serious(60秒)` だけ繰り返す） | 12時間 |
+
+「待ちN秒」は `SoundWorker` が再生を終えてから N秒待つ意味（`NotifyStep.delayAfterMs`）。クリップ
+自体の再生時間は別途加算される（＝実際のステップ間隔はクリップ長+delayAfterMs）。Pri1 はポップアップ
+自体が5秒で自動消滅する運用（→GUI仕様v2 §5.1）なので、音は1回鳴らして終わりでよい。
 
 ### 11.3 停止経路＝windowClosed 一本化
 
 - 発火ポップアップを開く直前に `Notifier.start(...)` で通知を開始する。
 - ポップアップの `windowClosed`（OK・Extend・× すべてここを通る）の先頭で `NotifyHandle.stop()` を呼ぶ。停止経路はここ1箇所に集約する。
 - `Notifier` 内部のスレッドは待ちを**100ms 刻み**（`SLEEP_SLICE_MS`）に割って毎回停止フラグを見る＝OK を押した瞬間に鳴りやむ。各ステップを鳴らす前にも停止フラグを見る。
-- `loop=true` のパターンは `maxDuration` に達するか外部からの `stop()` が来るまでステップを繰り返す。
+- `repeatTail > 0` のパターンは `maxDuration` に達するか外部からの `stop()` が来るまで末尾サイクルを繰り返す。
+- **`maxDuration` は待ちの途中でも打ち切る**：100ms 刻みで stop フラグを見る sleep のスライスは、
+  同時に deadline（開始時刻+maxDuration）も見る。＝ステップの待ち時間の最中に deadline へ到達したら、
+  そのステップの待ちを最後まで消化せず即座に抜ける（最大1パス分オーバーランしない）。
 - 停止フラグは `AtomicBoolean`。`stop()` は何度呼んでも安全（冪等）。
 - スレッド名 `kReminder-Notifier`、`setDaemon(true)`、優先度 `MIN_PRIORITY`（DEB／SND と同じ流儀）。
 - 例外は握りつぶして `DEB.pr` にログするだけで外へは投げない＝デバッグ機能やサブシステムの異常で本体を止めないという全体方針の延長。
@@ -276,6 +299,7 @@ public boolean NotifyHandle.awaitTermination(long ms)   // テスト用
 
 - mp3 等 wav 以外の形式（sound-map の値が拡張子アリなのはこの布石）
 - 同時発音・チャンネル管理（現状は完全直列）／`Clip` 事前ロード
-- ループ再生
 - 増幅（0dB 超・`getMaximum()` 側）
-- **同時多発時の交通整理**：10枚同時発火 × エスカレート音だと直列の `SoundWorker` が詰まる。実装する段で「鳴らすのは最優先の1件だけ」等の整理が要る。
+
+（ループ再生＝`NotifyPattern.repeatTail`、同時多発時の交通整理＝「鳴らすのは最優先の1件だけ」は
+通知拡張PRで実装済み。詳細は §11・GUI仕様v2 §5.1/§5.5。）
