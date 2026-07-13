@@ -12,6 +12,9 @@ import ken5005.kreminder.holiday.HolidayService;
 import ken5005.kreminder.holiday.HolidayState;
 import ken5005.kreminder.holiday.HolidayStatus;
 import ken5005.kreminder.holiday.OverlayHolidayCheck;
+import ken5005.kreminder.sound.NotifyHandle;
+import ken5005.kreminder.sound.NotifyPatterns;
+import ken5005.kreminder.sound.Notifier;
 import ken5005.kreminder.sound.SND;
 import ken5005.kreminder.sound.SoundMapBuilder;
 import ken5005.kreminder.sound.SoundMapParser;
@@ -32,6 +35,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
@@ -52,6 +56,10 @@ public class Main {
 
     // reminders.json の読み書き先。step3で--dataによる注入に対応する（現時点はデフォルト固定）
     private static ReminderStore store;
+
+    // ⑤: showPopup（Extend導線）・checkReminders（(Ext)自動削除）からアクセスするため static 保持。
+    // 従来はinvokeLater内のローカル変数だったが、両メソッドともstatic文脈から呼ばれるため昇格させた
+    private static MainWindow window;
 
     // ポップアップ同時表示の上限。全処理が EDT 一本なのでカウンタの同期は不要
     private static final int MAX_POPUPS = 10;
@@ -117,7 +125,7 @@ public class Main {
             // 読み書き先（Path）を一致させる（--data注入時の食い違い防止）。
             // store自体はmain()冒頭で--data解決済みでここではload()するだけ
             List<Reminder> reminders = store.load();
-            MainWindow window = new MainWindow(clock, reminders, store);
+            window = new MainWindow(clock, reminders, store);
             PanelSink panelSink = new PanelSink(window.getDebugTextArea());
             DEB.init(clock, new ConsoleSink(), new FileSink(clock), panelSink);
 
@@ -231,13 +239,23 @@ public class Main {
     private static void checkReminders(List<Reminder> reminders) {
         LocalDateTime now = LocalDateTime.now(clock);
         boolean changed = false;
+        // 拡張forの中でreminders.remove()するとConcurrentModificationExceptionになるため、
+        // (Ext)自動削除対象はここに溜めておき、ループを抜けてから削除する（GUI仕様v2 §5.4）
+        List<Reminder> extToRemove = new ArrayList<>();
         for (Reminder r : reminders) {
             if (!r.noticed && r.fireAt != null && !r.fireAt.isAfter(now)) {
                 r.noticed = true;
                 changed = true;
                 popupQueue.add(r);
                 reschedule(r, now);
+                if (ExtName.hasExtPrefix(r.message) && (r.repeat == null || r.repeat.isEmpty())) {
+                    extToRemove.add(r);
+                }
             }
+        }
+        for (Reminder r : extToRemove) {
+            window.removeReminder(r);
+            DEB.pr("(Ext) 発火後自動削除: " + r.message);
         }
         if (changed) {
             pumpPopups();
@@ -304,6 +322,10 @@ public class Main {
     }
 
     private static void showPopup(Reminder r) {
+        // priorityに応じた「鳴らし方」で通知を開始する（GUI仕様v2 §5.1/5.2）。実際に音を出すのは
+        // 既存のSoundWorkerのままで、ここはNotifierに委譲するだけ＝EDTを止めない
+        NotifyHandle notify = Notifier.start(NotifyPatterns.forPriority(r.priority));
+
         // 非モーダル化: モーダルのままだと setVisible(true) が EDT をブロックし、
         // ポップアップ表示中に1秒 Timer（残り時間表示・編集）が全部止まってしまう
         JDialog dialog = new JDialog((Frame) null, "kReminder", false);
@@ -317,8 +339,25 @@ public class Main {
 
         JButton ok = new JButton("OK");
         ok.addActionListener(e -> dialog.dispose());
+
+        // Extend（＝スヌーズ）: instant編集ダイアログを開き、OKで実際に登録できたときだけ
+        // このポップアップを閉じる（GUI仕様v2 §5.3）。キャンセル/Esc/×なら通知は消さずポップアップを残す。
+        // instant側もalwaysOnTopなので、開いている間だけ自分（張本人のポップアップ）は最前面を降りる
+        // ＝そうしないと2つのalwaysOnTop窓が被り、instant側が背後に隠れて読めなくなる
+        JButton extend = new JButton("Extend");
+        extend.addActionListener(e -> {
+            dialog.setAlwaysOnTop(false);
+            boolean added = window.openExtendEditor(r);
+            if (added) {
+                dialog.dispose();
+            } else {
+                dialog.setAlwaysOnTop(true); // キャンセルなら最前面に復帰
+            }
+        });
+
         JPanel south = new JPanel();
         south.add(ok);
+        south.add(extend);
         dialog.add(south, BorderLayout.SOUTH);
 
         dialog.pack();
@@ -326,11 +365,12 @@ public class Main {
         placePopup(dialog);
         dialog.setAlwaysOnTop(true);
 
-        // OK（dispose()）・×（DISPOSE_ON_CLOSE）のどちらで閉じても windowClosed が発火するので、
-        // 枚数カウンタの後処理をここに一本化する
+        // OK（dispose()）・Extend（OK登録時のdispose()）・×（DISPOSE_ON_CLOSE）のどれで閉じても
+        // windowClosed が発火するので、通知停止と枚数カウンタの後処理をここに一本化する
         dialog.addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosed(WindowEvent e) {
+                notify.stop();
                 openPopupCount--;
                 if (openPopupCount == 0) nextPopupLocation = null; // 全部閉じたら次の1枚目はまた中央から
                 pumpPopups();
