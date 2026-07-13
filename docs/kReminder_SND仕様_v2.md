@@ -1,7 +1,8 @@
-# kReminder 音声サブシステム仕様書 v2.0
+# kReminder 音声サブシステム仕様書 v2.1
 
-最終更新: 2026-07-11（chat36）
+最終更新: 2026-07-13（⑤ポップアップ配線）
 v1.0 からの変更＝chat33 実装時の確定事項（音量モデル）＋ chat35 の sound-map 一式を現況化。
+v2.0 からの変更＝⑤ポップアップ配線スライスで追加した「通知パターン（Pri ↔ 鳴らし方）」（§11）を反映。
 
 ---
 
@@ -220,17 +221,61 @@ public static Map<String, File> build(List<File> wavFiles, Map<String, String> t
 
 ---
 
-## 11. 実装履歴（参考）
+## 11. 通知パターン（Pri ↔ 鳴らし方）
+
+⑤ポップアップ配線スライスで追加。priority に紐づくのは音声ファイル名ではなく**「鳴らし方」**＝ `NotifyPattern`。**実際に音を出すのは既存の `SoundWorker`（直列1本）のまま**——`Notifier` は `SND.play` を呼ぶ（キューに積む）だけで、独自の再生経路は持たない。
+
+### 11.1 クラス構成
+
+パッケージ: `ken5005.kreminder.sound`
+
+| クラス | 種別 | 責務 |
+|---|---|---|
+| `NotifyStep` | record | 1ステップ分＝音声名・音量・鳴らした後の待ち時間（ms）。 |
+| `NotifyPattern` | record | ステップ列＋ループするか＋ループ時の最大時間。 |
+| `NotifyPatterns` | 純関数の表 | `Reminder.Priority → NotifyPattern` の対応表（`forPriority`）。 |
+| `Notifier` | 静的ファサード | `NotifyPattern` を渡すとデーモンスレッドを1本起動し `NotifyHandle` を返す（`start`）。 |
+| `NotifyHandle` | ハンドル | 起動したスレッドの停止（`stop`・冪等）と終了待ち（`awaitTermination`、テスト用）。 |
+
+### 11.2 API
+
+```java
+public record NotifyStep(String soundName, float volume, long delayAfterMs) {}
+public record NotifyPattern(List<NotifyStep> steps, boolean loop, Duration maxDuration) {}
+
+public static NotifyPattern NotifyPatterns.forPriority(Reminder.Priority p)
+
+public static NotifyHandle Notifier.start(NotifyPattern pattern)
+public void NotifyHandle.stop()                        // 冪等
+public boolean NotifyHandle.awaitTermination(long ms)   // テスト用
+```
+
+- `NotifyPatterns.forPriority` は Pri-1〜Pri-5 を switch で明示的に分岐する（将来ここだけ書き換えられるように、まとめて default に潰さない）。`p` が null のときも既定パターンを返す（旧 JSON 防御）。
+- ⑤時点は全 priority 共通で `new NotifyPattern(List.of(new NotifyStep("Standard", 1.0f, 0)), false, null)`。将来 Pri-5 を「0.5で鳴らす→500ms休む→1.0で鳴らす→…をループ、最大90分」に変えるときは、この表だけ書き換えれば `Notifier` も呼び出し元（Main）も触らずに済む。
+
+### 11.3 停止経路＝windowClosed 一本化
+
+- 発火ポップアップを開く直前に `Notifier.start(...)` で通知を開始する。
+- ポップアップの `windowClosed`（OK・Extend・× すべてここを通る）の先頭で `NotifyHandle.stop()` を呼ぶ。停止経路はここ1箇所に集約する。
+- `Notifier` 内部のスレッドは待ちを**100ms 刻み**（`SLEEP_SLICE_MS`）に割って毎回停止フラグを見る＝OK を押した瞬間に鳴りやむ。各ステップを鳴らす前にも停止フラグを見る。
+- `loop=true` のパターンは `maxDuration` に達するか外部からの `stop()` が来るまでステップを繰り返す。
+- 停止フラグは `AtomicBoolean`。`stop()` は何度呼んでも安全（冪等）。
+- スレッド名 `kReminder-Notifier`、`setDaemon(true)`、優先度 `MIN_PRIORITY`（DEB／SND と同じ流儀）。
+- 例外は握りつぶして `DEB.pr` にログするだけで外へは投げない＝デバッグ機能やサブシステムの異常で本体を止めないという全体方針の延長。
+
+---
+
+## 12. 実装履歴（参考）
 
 - **chat33（feature/sound）**：`WavLoader` 純関数 TDD → `SoundRequest`/`SoundWorker`/`SND` → `Config` に `snd.wav.dir` ＋ Main 配線 → 目視（正常直列再生・フォールバック・clamp・デフォルト書込）。
 - **chat35（feat/snd-soundmap・PR#15）**：`SoundMapParser` 純関数 TDD → `SoundMapBuilder` 純関数 TDD（案X／dangling／衝突／大小＝一番バグの巣）→ `WavLoader` List 化・`SND.init(Map)` 化・`play(name)` 追加・`Config.getSoundMapPath()` → `FatalErrorDialog`＋Main 本配線 → 目視（テンプレ生成／リネーム反映＝`呼び鈴=notify.wav`／音量省略／大小無視／致命3種で最前面ダイアログ→exit）。
 
 ---
 
-## 12. 将来拡張（現バージョンのスコープ外）
+## 13. 将来拡張（現バージョンのスコープ外）
 
-- Pri-1〜5 と音声名のマッピング（⑤ポップアップ配線スライスで追加予定）
 - mp3 等 wav 以外の形式（sound-map の値が拡張子アリなのはこの布石）
 - 同時発音・チャンネル管理（現状は完全直列）／`Clip` 事前ロード
 - ループ再生
 - 増幅（0dB 超・`getMaximum()` 側）
+- **同時多発時の交通整理**：10枚同時発火 × エスカレート音だと直列の `SoundWorker` が詰まる。実装する段で「鳴らすのは最優先の1件だけ」等の整理が要る。
