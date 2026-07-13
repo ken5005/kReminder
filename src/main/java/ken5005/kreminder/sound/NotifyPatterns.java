@@ -13,7 +13,7 @@ import java.util.List;
 public final class NotifyPatterns {
 
     private static final NotifyPattern STANDARD_ONCE =
-            new NotifyPattern(List.of(new NotifyStep("Standard", 1.0f, 0)), false, null);
+            new NotifyPattern(List.of(new NotifyStep("Standard", 1.0f, 0)), 0, null);
 
     private NotifyPatterns() {
     }

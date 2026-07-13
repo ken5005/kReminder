@@ -8,7 +8,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 
 class NotifyPatternsTest {
 
@@ -32,6 +31,6 @@ class NotifyPatternsTest {
         assertEquals(1, pattern.steps().size());
         assertEquals("Standard", pattern.steps().get(0).soundName());
         assertEquals(1.0f, pattern.steps().get(0).volume());
-        assertFalse(pattern.loop());
+        assertEquals(0, pattern.repeatTail());
     }
 }
