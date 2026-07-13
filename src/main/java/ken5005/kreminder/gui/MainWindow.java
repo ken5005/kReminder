@@ -3,6 +3,7 @@ package ken5005.kreminder.gui;
 import ken5005.kreminder.Config;
 import ken5005.kreminder.CopyName;
 import ken5005.kreminder.EditFormLogic;
+import ken5005.kreminder.ExtName;
 import ken5005.kreminder.FilterState;
 import ken5005.kreminder.Reminder;
 import ken5005.kreminder.ReminderFilter;
@@ -228,6 +229,12 @@ public class MainWindow extends JFrame {
      * 「編集」ボタンの導線（GUI仕様v2 ③-b/③-d）。選択行のReminderをEditDialogに渡して開き、
      * OKで閉じられた場合のみ入力値をoriginalへ書き戻して保存・再描画する。
      * 未選択（viewRow==-1）ならダイアログは開かず、ステータスバーで案内するだけにする。
+     *
+     * 【stale index対策】dialog.setVisible(true)はモーダルなので呼び出し元をブロックするが、
+     * 内部でネストしたイベントループを回す＝その間も1秒TimerのMain.checkRemindersはEDT上で走る。
+     * ⑤で「(Ext)発火後自動削除」が入ったことで、編集中に対象がリストから消えうるようになったため、
+     * ここで最初に掴んだmodelRowはダイアログが閉じた後にはstaleな可能性がある＝以降使わない。
+     * 閉じた後はreminders.indexOf(original)で参照一致により引き直す。
      */
     private void onEditButton() {
         int viewRow = table.getSelectedRow();
@@ -241,9 +248,9 @@ public class MainWindow extends JFrame {
 
         var dialog = new EditDialog(this, original, clock);
         dialog.setLocationRelativeTo(this);
-        dialog.setVisible(true); // モーダルなのでダイアログが閉じるまでここで待つ
+        dialog.setVisible(true); // モーダルなのでダイアログが閉じるまでここで待つ（この間にoriginalが消えうる）
 
-        if (!dialog.isOkPressed()) return; // キャンセル・Esc・×は何もしない
+        if (!dialog.isOkPressed()) return; // キャンセル・Esc・×は何もしない（消えていてもそのまま＝仕様どおり）
 
         // OK活性で保証済みだが、書き戻し前に念のため再パースして確認する（防御的）
         var parsed = EditFormLogic.parseExecTime(dialog.getExecTimeText());
@@ -257,8 +264,20 @@ public class MainWindow extends JFrame {
         original.action = dialog.getCmdText();
         original.noticed = false;
 
-        store.save(reminders); // 一本化した同一リスト・同一storeで全書き
-        tableModel.reminderUpdatedAt(modelRow);
+        // ダイアログを閉じた後に参照一致で引き直す（開いている間に(Ext)自動削除で消えている可能性）
+        int currentRow = reminders.indexOf(original);
+        if (currentRow == -1) {
+            // 編集中に発火して(Ext)自動削除された（§5.4）。§4.7「編集＝削除＋追加」に従い復活させる
+            int newRow = tableModel.addReminder(original);
+            store.save(reminders);
+            revealAddedRow(newRow);
+            String message = "編集中に発火して自動削除されたため、新しい予定として追加しました";
+            statusBar.setText(message);
+            DEB.pr(message + ": " + original.message);
+        } else {
+            store.save(reminders); // 一本化した同一リスト・同一storeで全書き
+            tableModel.reminderUpdatedAt(currentRow);
+        }
     }
 
     /**
@@ -269,7 +288,7 @@ public class MainWindow extends JFrame {
         Reminder r = new Reminder();
         r.fireAt = LocalDateTime.now(clock).withSecond(0).withNano(0);
         r.message = "";
-        openEditorForNew(r, EditDialog.Mode.NORMAL);
+        openEditorForNew(r, EditDialog.Mode.NORMAL, false);
     }
 
     /**
@@ -281,7 +300,7 @@ public class MainWindow extends JFrame {
         Reminder r = new Reminder();
         r.fireAt = LocalDateTime.now(clock).withSecond(0).withNano(0);
         r.message = "";
-        openEditorForNew(r, EditDialog.Mode.INSTANT);
+        openEditorForNew(r, EditDialog.Mode.INSTANT, false);
     }
 
     /**
@@ -306,7 +325,7 @@ public class MainWindow extends JFrame {
         copy.repeat = original.repeat;
         copy.noticed = false;
 
-        openEditorForNew(copy, EditDialog.Mode.NORMAL);
+        openEditorForNew(copy, EditDialog.Mode.NORMAL, false);
     }
 
     /**
@@ -314,16 +333,21 @@ public class MainWindow extends JFrame {
      * 渡されたReminder（まだreminders未追加）をEditDialogで開き、OKなら入力値を書き戻したうえで
      * リストへ追加・保存・表示（選択+スクロール、フィルタで隠れる場合はメッセージ）を行う。
      * キャンセル/Esc/×は何もしない＝reminders/JSONに一切影響を与えない。
+     * 戻り値はOKで実際にremindersへ追加できたかどうか（⑤・openExtendEditorがポップアップの
+     * 開閉判定に使う。新規/instant/複製の既存3呼び出しは戻り値を無視するだけで挙動は変わらない）。
+     * alwaysOnTop：trueならダイアログを最前面固定にする（⑤・openExtendEditorがtrueを渡す。
+     * 発火ポップアップも最前面固定のため、被って読めなくなるのを避けるため＝GUI仕様v2 §5.3）。
      */
-    private void openEditorForNew(Reminder r, EditDialog.Mode mode) {
+    private boolean openEditorForNew(Reminder r, EditDialog.Mode mode, boolean alwaysOnTop) {
         var dialog = new EditDialog(this, r, clock, mode);
         dialog.setLocationRelativeTo(this);
+        if (alwaysOnTop) dialog.setAlwaysOnTop(true);
         dialog.setVisible(true);
 
-        if (!dialog.isOkPressed()) return; // キャンセル・Esc・×は追加しない
+        if (!dialog.isOkPressed()) return false; // キャンセル・Esc・×は追加しない
 
         var parsed = EditFormLogic.parseExecTime(dialog.getExecTimeText());
-        if (parsed.isEmpty()) return; // OK活性で保証済みだが、書き戻し前に念のため再パース（防御的）
+        if (parsed.isEmpty()) return false; // OK活性で保証済みだが、書き戻し前に念のため再パース（防御的）
 
         r.fireAt = parsed.get();
         r.repeat = dialog.getRepeatText();
@@ -335,6 +359,40 @@ public class MainWindow extends JFrame {
         int modelRow = tableModel.addReminder(r);
         store.save(reminders);
         revealAddedRow(modelRow);
+        return true;
+    }
+
+    /**
+     * 発火ポップアップの Extend（＝スヌーズ）ボタンの導線（GUI仕様v2 §5.3）。
+     * コメント頭に "(Ext) " を前置し、繰り返しは引き継がず（単発）、優先度・Cmdは引き継いだ
+     * Reminderを組み立て、instantモードのEditDialogをopenEditorForNewへ渡す。
+     * 実行時刻はinstant仕様上ユーザーが打つため、ここではnon-null埋め（InstantField.setDateTimeは
+     * no-opだが値そのものはnullを許さないため）のダミー値を入れるだけにとどめる。
+     * 戻り値はopenEditorForNewの結果そのまま＝呼び出し元（発火ポップアップ）がこれを見て
+     * 「OKで登録できたときだけポップアップを閉じる」判定に使う（§5.3）。
+     */
+    public boolean openExtendEditor(Reminder fired) {
+        Reminder ext = new Reminder();
+        ext.fireAt = LocalDateTime.now(clock).withSecond(0).withNano(0);
+        ext.message = ExtName.withExtPrefix(fired.message);
+        ext.priority = fired.priority;
+        ext.action = fired.action;
+        ext.repeat = "";
+        ext.noticed = false;
+        return openEditorForNew(ext, EditDialog.Mode.INSTANT, true);
+    }
+
+    /**
+     * (Ext) 付き単発予定の発火後自動削除（GUI仕様v2 §5.4）で使う、行の除去だけを行う口。
+     * remindersの参照一致でモデル行を引き、見つかった場合のみtableModel.removeReminderAtへ委譲する
+     * （行の増減はReminderTableModelに閉じる、というCLAUDE.mdの原則を守るため）。
+     * store.saveはここでは呼ばない＝呼び出し元（Main.checkReminders）が発火時に必ずsaveするため、
+     * 二重保存を避ける。見つからない場合は何もしない（防御的）。
+     */
+    public void removeReminder(Reminder r) {
+        int modelRow = reminders.indexOf(r);
+        if (modelRow == -1) return;
+        tableModel.removeReminderAt(modelRow);
     }
 
     /**
@@ -358,6 +416,11 @@ public class MainWindow extends JFrame {
      * 「削除」ボタン／Delete キーの導線（GUI仕様v2 §2.5.4）。
      * 選択行が無ければ何もしない。確認ダイアログで「はい」を選んだ場合のみ、
      * リストから除去・保存・選択解除まで行う。
+     *
+     * 【stale index対策】JOptionPane.showConfirmDialogもonEditButtonと同じくネストしたイベント
+     * ループを回すため、確認待ちの間に対象が(Ext)自動削除で消えている可能性がある。
+     * ここで最初に掴んだmodelRowは確認ダイアログが閉じた後は使わず、reminders.indexOf(target)で
+     * 参照一致により引き直す。
      */
     private void onDeleteButton() {
         int viewRow = table.getSelectedRow();
@@ -380,7 +443,16 @@ public class MainWindow extends JFrame {
             JOptionPane.YES_NO_OPTION);
         if (result != JOptionPane.YES_OPTION) return;
 
-        tableModel.removeReminderAt(modelRow);
+        // 確認待ちの間に対象が(Ext)自動削除で消えている可能性があるため引き直す
+        int currentRow = reminders.indexOf(target);
+        if (currentRow == -1) {
+            String message = "対象は確認中に発火して自動削除されました（(Ext) 規約・§5.4）";
+            statusBar.setText(message);
+            DEB.pr(message + ": " + target.message);
+            return;
+        }
+
+        tableModel.removeReminderAt(currentRow);
         store.save(reminders);
         table.clearSelection();
         statusBar.setText("削除しました");
