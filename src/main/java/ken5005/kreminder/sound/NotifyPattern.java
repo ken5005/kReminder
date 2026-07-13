@@ -21,6 +21,17 @@ public record NotifyPattern(List<NotifyStep> steps, int repeatTail, Duration max
             throw new IllegalArgumentException(
                     "repeatTail は steps.size() 以下でなければならない: " + repeatTail + " > " + steps.size());
         }
+        // ホットループ防止：Notifierはplay()の再生完了を待たずenqueueするだけなので、
+        // 待ちゼロのステップを繰り返すとSoundWorkerのキュー（容量30）を即座に埋め尽くしdropし続ける。
+        if (repeatTail > 0) {
+            long tailDelaySum = steps.subList(steps.size() - repeatTail, steps.size()).stream()
+                    .mapToLong(NotifyStep::delayAfterMs)
+                    .sum();
+            if (tailDelaySum <= 0) {
+                throw new IllegalArgumentException(
+                        "繰り返し対象の末尾ステップに待ちが無い（ホットループになる）: repeatTail=" + repeatTail);
+            }
+        }
         steps = List.copyOf(steps);
     }
 }

@@ -51,7 +51,7 @@ class NotifierTest {
     @Test
     void constructor_repeatTailEqualsStepsSize_ok() {
         NotifyPattern pattern = new NotifyPattern(
-                List.of(new NotifyStep("Standard", 1.0f, 0)), 1, null);
+                List.of(new NotifyStep("Standard", 1.0f, 100)), 1, null);
 
         assertTrue(pattern.steps().size() == 1);
     }
@@ -66,6 +66,12 @@ class NotifierTest {
     void constructor_negativeRepeatTail_throws() {
         assertThrows(IllegalArgumentException.class, () ->
                 new NotifyPattern(List.of(new NotifyStep("Standard", 1.0f, 0)), -1, null));
+    }
+
+    @Test
+    void constructor_repeatTailWithZeroDelay_throws() {
+        assertThrows(IllegalArgumentException.class, () ->
+                new NotifyPattern(List.of(new NotifyStep("Standard", 1.0f, 0)), 1, null));
     }
 
     @Test
