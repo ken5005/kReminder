@@ -3,6 +3,7 @@ package ken5005.kreminder.gui;
 import ken5005.kreminder.Config;
 import ken5005.kreminder.CopyName;
 import ken5005.kreminder.EditFormLogic;
+import ken5005.kreminder.ExtName;
 import ken5005.kreminder.FilterState;
 import ken5005.kreminder.Reminder;
 import ken5005.kreminder.ReminderFilter;
@@ -314,16 +315,18 @@ public class MainWindow extends JFrame {
      * 渡されたReminder（まだreminders未追加）をEditDialogで開き、OKなら入力値を書き戻したうえで
      * リストへ追加・保存・表示（選択+スクロール、フィルタで隠れる場合はメッセージ）を行う。
      * キャンセル/Esc/×は何もしない＝reminders/JSONに一切影響を与えない。
+     * 戻り値はOKで実際にremindersへ追加できたかどうか（⑤・openExtendEditorがポップアップの
+     * 開閉判定に使う。新規/instant/複製の既存3呼び出しは戻り値を無視するだけで挙動は変わらない）。
      */
-    private void openEditorForNew(Reminder r, EditDialog.Mode mode) {
+    private boolean openEditorForNew(Reminder r, EditDialog.Mode mode) {
         var dialog = new EditDialog(this, r, clock, mode);
         dialog.setLocationRelativeTo(this);
         dialog.setVisible(true);
 
-        if (!dialog.isOkPressed()) return; // キャンセル・Esc・×は追加しない
+        if (!dialog.isOkPressed()) return false; // キャンセル・Esc・×は追加しない
 
         var parsed = EditFormLogic.parseExecTime(dialog.getExecTimeText());
-        if (parsed.isEmpty()) return; // OK活性で保証済みだが、書き戻し前に念のため再パース（防御的）
+        if (parsed.isEmpty()) return false; // OK活性で保証済みだが、書き戻し前に念のため再パース（防御的）
 
         r.fireAt = parsed.get();
         r.repeat = dialog.getRepeatText();
@@ -335,6 +338,40 @@ public class MainWindow extends JFrame {
         int modelRow = tableModel.addReminder(r);
         store.save(reminders);
         revealAddedRow(modelRow);
+        return true;
+    }
+
+    /**
+     * 発火ポップアップの Extend（＝スヌーズ）ボタンの導線（GUI仕様v2 §5.3）。
+     * コメント頭に "(Ext) " を前置し、繰り返しは引き継がず（単発）、優先度・Cmdは引き継いだ
+     * Reminderを組み立て、instantモードのEditDialogをopenEditorForNewへ渡す。
+     * 実行時刻はinstant仕様上ユーザーが打つため、ここではnon-null埋め（InstantField.setDateTimeは
+     * no-opだが値そのものはnullを許さないため）のダミー値を入れるだけにとどめる。
+     * 戻り値はopenEditorForNewの結果そのまま＝呼び出し元（発火ポップアップ）がこれを見て
+     * 「OKで登録できたときだけポップアップを閉じる」判定に使う（§5.3）。
+     */
+    public boolean openExtendEditor(Reminder fired) {
+        Reminder ext = new Reminder();
+        ext.fireAt = LocalDateTime.now(clock).withSecond(0).withNano(0);
+        ext.message = ExtName.withExtPrefix(fired.message);
+        ext.priority = fired.priority;
+        ext.action = fired.action;
+        ext.repeat = "";
+        ext.noticed = false;
+        return openEditorForNew(ext, EditDialog.Mode.INSTANT);
+    }
+
+    /**
+     * (Ext) 付き単発予定の発火後自動削除（GUI仕様v2 §5.4）で使う、行の除去だけを行う口。
+     * remindersの参照一致でモデル行を引き、見つかった場合のみtableModel.removeReminderAtへ委譲する
+     * （行の増減はReminderTableModelに閉じる、というCLAUDE.mdの原則を守るため）。
+     * store.saveはここでは呼ばない＝呼び出し元（Main.checkReminders）が発火時に必ずsaveするため、
+     * 二重保存を避ける。見つからない場合は何もしない（防御的）。
+     */
+    public void removeReminder(Reminder r) {
+        int modelRow = reminders.indexOf(r);
+        if (modelRow == -1) return;
+        tableModel.removeReminderAt(modelRow);
     }
 
     /**
