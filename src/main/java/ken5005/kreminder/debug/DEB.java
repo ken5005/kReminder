@@ -31,7 +31,12 @@ public final class DEB {
     /** 終了時に1回呼ぶ。キューに残った行をflushしてからsinkを閉じる。 */
     public static void shutdown() {
         DebWorker w = worker;
-        if (w != null) w.shutdown();
+        if (w != null) {
+            w.shutdown();
+            // shutdown完了後もworkerが非nullのままだと、以降のpr()が誰も読まない停止済み
+            // キューに積まれて黙って消える。nullに戻すことでinit前と同じSystem.out経路に落とす。
+            worker = null;
+        }
     }
 
     public static void pr(String s) {
