@@ -36,7 +36,6 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -86,28 +85,32 @@ public class Main {
     private static NotifyHandle notifyingHandle;
 
     public static void main(String[] args) {
+        // 引数パース自体はArgsParser（純関数）に委譲。ここでは結果の受け取りとI/O判断のみ行う
+        Args parsedArgs;
+        try {
+            parsedArgs = ArgsParser.parse(args);
+        } catch (IllegalArgumentException e) {
+            abort(e.getMessage());
+            return;
+        }
+
+        if (parsedArgs.help()) {
+            // --help/-hはエラーではないのでFatalErrorDialogは出さず、stderrへUsageを出して正常終了
+            System.err.println(ArgsParser.USAGE);
+            System.exit(0);
+            return;
+        }
+
         boolean fakeClockUsed = false;
-        String dataOpt = null;
-        for (String arg : args) {
-            if (arg.startsWith("--fake-now=")) {
-                String value = arg.substring("--fake-now=".length());
-                try {
-                    LocalDateTime fakeNow = LocalDateTime.parse(value);
-                    Duration offset = Duration.between(LocalDateTime.now(), fakeNow);
-                    clock = Clock.offset(Clock.systemDefaultZone(), offset);
-                    System.out.println("[fake-clock] fake-now=" + fakeNow + "  offset=" + offset);
-                    fakeClockUsed = true;
-                } catch (DateTimeParseException e) {
-                    System.err.println("kReminder: invalid --fake-now value: \"" + value + "\"  (expected YYYY-MM-DDTHH:mm:ss)");
-                    System.exit(1);
-                }
-            } else if (arg.startsWith("--data=")) {
-                dataOpt = arg.substring("--data=".length());
-            }else{
-                System.err.println("kReminder: invalid arg \"" + arg + "\"");
-            }
+        if (parsedArgs.fakeNow() != null) {
+            LocalDateTime fakeNow = parsedArgs.fakeNow();
+            Duration offset = Duration.between(LocalDateTime.now(), fakeNow);
+            clock = Clock.offset(Clock.systemDefaultZone(), offset);
+            System.out.println("[fake-clock] fake-now=" + fakeNow + "  offset=" + offset);
+            fakeClockUsed = true;
         }
         final boolean fakeClockUsedFinal = fakeClockUsed;
+        String dataOpt = parsedArgs.dataPath();
 
         // --data: 絶対パスのみ許可し、かつ指定時はファイル存在必須（新規作成で本来のreminders.jsonと
         // 混同するのを防ぐ）。相対パス・未存在パスはfake-nowの不正値と同じくstderr+exit(1)
@@ -193,6 +196,22 @@ public class Main {
             },
             clock
         );
+    }
+
+    /**
+     * 引数不正時の共通終了処理（戻らない）。stderrへは常に出す一方、javaw起動時はstderrが誰にも
+     * 見えないため（System.console() == null で判定）、FatalErrorDialogでも同じ内容を知らせる。
+     * showAndExit内部でexit(1)するが、コンソール起動時の経路（if文をスキップする側）を閉じるため
+     * 末尾に改めてSystem.exit(1)を置く。
+     */
+    private static void abort(String message) {
+        System.err.println("kReminder: " + message);
+        System.err.println();
+        System.err.println(ArgsParser.USAGE);
+        if (System.console() == null) {
+            FatalErrorDialog.showAndExit(message + "\n\n" + ArgsParser.USAGE);
+        }
+        System.exit(1);
     }
 
     /**
