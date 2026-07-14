@@ -9,7 +9,7 @@ import java.util.Properties;
 
 /**
  * フィルタトグルの永続化設定（GUI仕様v2 §3.7・案A＝今回はフィルタ6トグルのみ）。
- * %APPDATA%\kReminder\config.properties（APPDATA無しは user.home フォールバック）。
+ * AppDir.base()\config.properties に読み書きする。
  * I/O 失敗は握ってデフォルト値のまま継続する（本体を落とさない・ReminderStore と同じ方針）。
  */
 public class Config {
@@ -48,16 +48,13 @@ public class Config {
         return configDir().resolve(FILE_NAME);
     }
 
-    /** config.properties と同じ APPDATA→user.home フォールバックで sound-map.properties を指す。 */
+    /** config.properties と同じベースフォルダで sound-map.properties を指す。 */
     public Path getSoundMapPath() {
         return configDir().resolve(SOUND_MAP_FILE_NAME);
     }
 
     private static Path configDir() {
-        String appData = System.getenv("APPDATA");
-        return appData != null
-            ? Path.of(appData, "kReminder")
-            : Path.of(System.getProperty("user.home"), "kReminder");
+        return AppDir.base();
     }
 
     /** ファイル無し・I/O失敗はデフォルト値を維持したまま return する。キー欠けも同様。 */

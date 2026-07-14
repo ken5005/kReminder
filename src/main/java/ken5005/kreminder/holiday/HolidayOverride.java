@@ -1,5 +1,7 @@
 package ken5005.kreminder.holiday;
 
+import ken5005.kreminder.AppDir;
+
 import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
 
@@ -38,11 +40,7 @@ public final class HolidayOverride {
     }
 
     static Path getOverridePath() {
-        String appData = System.getenv("APPDATA");
-        Path dir = appData != null
-            ? Path.of(appData, "kReminder")
-            : Path.of(System.getProperty("user.home"), "kReminder");
-        return dir.resolve(FILE_NAME);
+        return AppDir.resolve(FILE_NAME);
     }
 
     /** Loads the override file and wraps base with an OverlayHolidayCheck. Never throws. */

@@ -1,5 +1,7 @@
 package ken5005.kreminder.holiday;
 
+import ken5005.kreminder.AppDir;
+
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -18,10 +20,7 @@ public final class HolidayLog {
 
     public static void log(Clock clock, String message) {
         try {
-            String appData = System.getenv("APPDATA");
-            Path dir = appData != null
-                ? Path.of(appData, "kReminder")
-                : Path.of(System.getProperty("user.home"), "kReminder");
+            Path dir = AppDir.base();
             Files.createDirectories(dir);
             String line = LocalDateTime.now(clock).format(FMT) + " " + message + System.lineSeparator();
             Files.writeString(dir.resolve(FILE_NAME), line, StandardCharsets.UTF_8,
