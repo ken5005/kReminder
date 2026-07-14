@@ -1,0 +1,8 @@
+#Tue Jul 14 06:37:12 JST 2026
+filter.showAllRepeat=true
+filter.showEnded=false
+filter.showFar=false
+filter.showImminent=true
+filter.showLowPriority=true
+filter.showSoon=true
+snd.wav.dir=C\:\\tools2\\etc\\wav

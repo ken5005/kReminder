@@ -9,6 +9,12 @@ build/
 privateFiles/
 *.html
 tmp/
+data/
+testdata/*
+!testdata/config.properties.example
+!testdata/sound-map.properties
+!testdata/reminders_4.json
+!testdata/reminders_10.json
 
 ### IntelliJ IDEA ###
 .idea/modules.xml
