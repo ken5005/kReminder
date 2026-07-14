@@ -110,7 +110,7 @@ public class Main {
             fakeClockUsed = true;
         }
         final boolean fakeClockUsedFinal = fakeClockUsed;
-        String dataOpt = parsedArgs.dataPath();
+        String dataOpt = parsedArgs.basePath();
 
         // --data: 絶対パスのみ許可し、かつ指定時はファイル存在必須（新規作成で本来のreminders.jsonと
         // 混同するのを防ぐ）。相対パス・未存在パスはfake-nowの不正値と同じくstderr+exit(1)

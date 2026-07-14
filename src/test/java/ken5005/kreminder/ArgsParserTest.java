@@ -13,11 +13,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ArgsParserTest {
 
     @Test
-    void emptyArgsReturnsAllNullNonHelp() {
-        Args args = ArgsParser.parse(new String[]{});
-        assertFalse(args.help());
-        assertNull(args.fakeNow());
-        assertNull(args.dataPath());
+    void emptyArgsThrowsBecauseBaseIsRequired() {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+            () -> ArgsParser.parse(new String[]{}));
+        assertTrue(e.getMessage().contains("--base は必須です"));
     }
 
     @Test
@@ -39,8 +38,18 @@ class ArgsParserTest {
     }
 
     @Test
+    void helpWinsEvenWithoutBase() {
+        // --baseが無くても--helpが最優先されるべき（Usageを見たいだけの人を止めない）
+        Args args = ArgsParser.parse(new String[]{"--help"});
+        assertTrue(args.help());
+        assertNull(args.fakeNow());
+        assertNull(args.basePath());
+    }
+
+    @Test
     void fakeNowValid() {
-        Args args = ArgsParser.parse(new String[]{"--fake-now=2026-05-05T08:55:00"});
+        Args args = ArgsParser.parse(new String[]{
+            "--fake-now=2026-05-05T08:55:00", "--base=testdata"});
         assertEquals(LocalDateTime.of(2026, 5, 5, 8, 55, 0), args.fakeNow());
         assertFalse(args.help());
     }
@@ -48,65 +57,86 @@ class ArgsParserTest {
     @Test
     void fakeNowInvalidDateTimeThrows() {
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-            () -> ArgsParser.parse(new String[]{"--fake-now=not-a-date"}));
+            () -> ArgsParser.parse(new String[]{"--fake-now=not-a-date", "--base=testdata"}));
         assertTrue(e.getMessage().contains("--fake-now の日時が不正です"));
     }
 
     @Test
     void fakeNowEmptyValueThrows() {
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-            () -> ArgsParser.parse(new String[]{"--fake-now="}));
+            () -> ArgsParser.parse(new String[]{"--fake-now=", "--base=testdata"}));
         assertTrue(e.getMessage().contains("--fake-now に値がありません"));
     }
 
     @Test
     void fakeNowWithoutEqualsThrows() {
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-            () -> ArgsParser.parse(new String[]{"--fake-now"}));
+            () -> ArgsParser.parse(new String[]{"--fake-now", "--base=testdata"}));
         assertTrue(e.getMessage().contains("--fake-now には値が必要です"));
     }
 
     @Test
-    void dataValid() {
-        Args args = ArgsParser.parse(new String[]{"--data=C:\\testdata\\reminders_4.json"});
-        assertEquals("C:\\testdata\\reminders_4.json", args.dataPath());
+    void fakeNowDuplicateThrows() {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+            () -> ArgsParser.parse(new String[]{
+                "--fake-now=2026-05-05T08:55:00", "--fake-now=2026-05-06T08:55:00", "--base=testdata"}));
+        assertTrue(e.getMessage().contains("--fake-now が複数回指定されています"));
+    }
+
+    @Test
+    void baseValid() {
+        Args args = ArgsParser.parse(new String[]{"--base=C:\\testdata"});
+        assertEquals("C:\\testdata", args.basePath());
         assertFalse(args.help());
     }
 
     @Test
-    void dataEmptyValueThrows() {
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-            () -> ArgsParser.parse(new String[]{"--data="}));
-        assertTrue(e.getMessage().contains("--data に値がありません"));
+    void baseRelativePathValid() {
+        Args args = ArgsParser.parse(new String[]{"--base=testdata"});
+        assertEquals("testdata", args.basePath());
     }
 
     @Test
-    void dataWithoutEqualsThrows() {
+    void baseEmptyValueThrows() {
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-            () -> ArgsParser.parse(new String[]{"--data"}));
-        assertTrue(e.getMessage().contains("--data には値が必要です"));
+            () -> ArgsParser.parse(new String[]{"--base="}));
+        assertTrue(e.getMessage().contains("--base に値がありません"));
+    }
+
+    @Test
+    void baseWithoutEqualsThrows() {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+            () -> ArgsParser.parse(new String[]{"--base"}));
+        assertTrue(e.getMessage().contains("--base には値が必要です"));
+    }
+
+    @Test
+    void baseMissingThrows() {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+            () -> ArgsParser.parse(new String[]{"--fake-now=2026-05-05T08:55:00"}));
+        assertTrue(e.getMessage().contains("--base は必須です"));
     }
 
     @Test
     void unknownArgThrows() {
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-            () -> ArgsParser.parse(new String[]{"--bogus"}));
+            () -> ArgsParser.parse(new String[]{"--bogus", "--base=testdata"}));
         assertTrue(e.getMessage().contains("不明な引数です"));
     }
 
     @Test
     void duplicateOptionThrows() {
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-            () -> ArgsParser.parse(new String[]{"--data=C:\\a.json", "--data=C:\\b.json"}));
-        assertTrue(e.getMessage().contains("--data が複数回指定されています"));
+            () -> ArgsParser.parse(new String[]{"--base=C:\\a", "--base=C:\\b"}));
+        assertTrue(e.getMessage().contains("--base が複数回指定されています"));
     }
 
     @Test
-    void fakeNowAndDataCombinedBothApplied() {
+    void fakeNowAndBaseCombinedBothApplied() {
         Args args = ArgsParser.parse(new String[]{
-            "--fake-now=2026-05-05T08:55:00", "--data=C:\\testdata\\reminders_4.json"});
+            "--fake-now=2026-05-05T08:55:00", "--base=C:\\testdata"});
         assertEquals(LocalDateTime.of(2026, 5, 5, 8, 55, 0), args.fakeNow());
-        assertEquals("C:\\testdata\\reminders_4.json", args.dataPath());
+        assertEquals("C:\\testdata", args.basePath());
         assertFalse(args.help());
     }
 }
