@@ -1,5 +1,6 @@
 package ken5005.kreminder.holiday;
 
+import ken5005.kreminder.AppDir;
 import ken5005.kreminder.HolidayCheck;
 
 import java.nio.file.Files;
@@ -157,10 +158,7 @@ public final class HolidayService {
 
     private static void saveFailureCsv(byte[] raw) {
         try {
-            String appData = System.getenv("APPDATA");
-            Path dir = appData != null
-                ? Path.of(appData, "kReminder")
-                : Path.of(System.getProperty("user.home"), "kReminder");
+            Path dir = AppDir.base();
             Files.createDirectories(dir);
             Files.write(dir.resolve("holiday_last_failure.csv"), raw);
             System.err.println("HolidayService: raw CSV saved to holiday_last_failure.csv for diagnosis");

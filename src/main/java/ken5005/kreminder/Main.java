@@ -56,7 +56,7 @@ public class Main {
     private static TrayIcon trayIcon;
     private static HolidayStatus lastTrayStatus;
 
-    // reminders.json の読み書き先。step3で--dataによる注入に対応する（現時点はデフォルト固定）
+    // reminders.json の読み書き先。AppDir.resolve("reminders.json")で決まる
     private static ReminderStore store;
 
     // ⑤: showPopup（Extend導線）・checkReminders（(Ext)自動削除）からアクセスするため static 保持。
@@ -101,6 +101,16 @@ public class Main {
             return;
         }
 
+        // AppDir.init はmain()の一手目（--help判定の直後）で呼ぶ。この後すぐ動くHolidayOverride.load /
+        // HolidayService.loadInitial がinvokeLaterより前でベースフォルダを参照するため、他の初期化より先に確定させる。
+        AppDir.init(Path.of(parsedArgs.basePath()));
+        // 存在チェックはここで一度だけ行う。打ち間違いで空フォルダが自動生成される事故を防ぐため
+        // 自動作成はせず、無ければUsage表示付きでabort（javaw起動でも見えるようFatalErrorDialogを使う）
+        if (!Files.isDirectory(AppDir.base())) {
+            abort("--base で指定したフォルダが存在しません: \"" + AppDir.base() + "\"");
+            return;
+        }
+
         boolean fakeClockUsed = false;
         if (parsedArgs.fakeNow() != null) {
             LocalDateTime fakeNow = parsedArgs.fakeNow();
@@ -110,23 +120,9 @@ public class Main {
             fakeClockUsed = true;
         }
         final boolean fakeClockUsedFinal = fakeClockUsed;
-        String dataOpt = parsedArgs.basePath();
 
-        // --data: 絶対パスのみ許可し、かつ指定時はファイル存在必須（新規作成で本来のreminders.jsonと
-        // 混同するのを防ぐ）。相対パス・未存在パスはfake-nowの不正値と同じくstderr+exit(1)
-        try {
-            Path dataPath = DataPathResolver.resolve(dataOpt);
-            if (dataOpt != null && !Files.exists(dataPath)) {
-                System.err.println("kReminder: --data path does not exist: \"" + dataPath + "\"");
-                System.exit(1);
-                return;
-            }
-            store = new ReminderStore(dataPath);
-        } catch (IllegalArgumentException e) {
-            System.err.println("kReminder: " + e.getMessage());
-            System.exit(1);
-            return;
-        }
+        // reminders.jsonの存在チェックは撤廃：不在なら空リストで起動する（ReminderStoreの従来挙動のまま）
+        store = new ReminderStore(AppDir.resolve("reminders.json"));
 
         // Load override file once — holds add/remove sets for the session
         loadedOverride = HolidayOverride.load(HolidayCheck.NONE);
@@ -142,8 +138,8 @@ public class Main {
             // ③-d: リスト一本化。ここでload()した同一インスタンスをMainWindow/checkReminders双方に渡す
             // （以前はMainWindowが自前でload()しており、編集や発火状態の書き戻し先が食い違っていた）
             // storeも同様に単一インスタンスをMainWindow/checkReminders双方に渡し、
-            // 読み書き先（Path）を一致させる（--data注入時の食い違い防止）。
-            // store自体はmain()冒頭で--data解決済みでここではload()するだけ
+            // 読み書き先（Path）を一致させる（AppDir切り替え時の食い違い防止）。
+            // store自体はmain()冒頭でAppDir.resolve済みでここではload()するだけ
             List<Reminder> reminders = store.load();
             window = new MainWindow(clock, reminders, store);
             PanelSink panelSink = new PanelSink(window.getDebugTextArea());

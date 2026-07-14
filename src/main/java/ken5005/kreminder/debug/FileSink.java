@@ -1,5 +1,7 @@
 package ken5005.kreminder.debug;
 
+import ken5005.kreminder.AppDir;
+
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -11,7 +13,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 /**
- * %APPDATA%\kReminder\logs\DEB-yyyyMMdd-HH.txt へ追記する。Clockの時が
+ * AppDir.base()\logs\DEB-yyyyMMdd-HH.txt へ追記する。Clockの時が
  * 変わったら新しいファイルへロールオーバーする。IO失敗は全て握って
  * stderrへ出すだけ — ログの失敗が本体を巻き込んではいけない。
  */
@@ -30,11 +32,7 @@ public final class FileSink implements LogSink {
     }
 
     private static Path resolveDir() {
-        String appData = System.getenv("APPDATA");
-        Path base = appData != null
-            ? Path.of(appData, "kReminder")
-            : Path.of(System.getProperty("user.home"), "kReminder");
-        return base.resolve("logs");
+        return AppDir.resolve("logs");
     }
 
     @Override

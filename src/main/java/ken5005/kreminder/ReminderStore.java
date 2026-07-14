@@ -38,12 +38,7 @@ public class ReminderStore {
 
     private final Path path;
 
-    /** 従来どおりのデフォルト先（%APPDATA%\kReminder\reminders.json 等）を使う。 */
-    public ReminderStore() {
-        this(DataPathResolver.defaultPath());
-    }
-
-    /** --data 等で明示指定された Path を読み書き先にする。 */
+    /** AppDir.resolve("reminders.json") 等、呼び出し側が決めた Path を読み書き先にする。 */
     public ReminderStore(Path path) {
         this.path = path;
     }
