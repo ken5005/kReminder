@@ -103,6 +103,8 @@ public class Main {
                 }
             } else if (arg.startsWith("--data=")) {
                 dataOpt = arg.substring("--data=".length());
+            }else{
+                System.err.println("kReminder: invalid arg \"" + arg + "\"");
             }
         }
         final boolean fakeClockUsedFinal = fakeClockUsed;
