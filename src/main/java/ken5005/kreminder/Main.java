@@ -122,22 +122,20 @@ public class Main {
 
         // 単一プロセスロック。この時点ではDEBが未初期化のためSystem.out::printlnをロガーとして渡す
         // （lockパッケージ自体もDEBに依存させない＝他ツールへそのままコピーできる汎用実装にするため）。
-        // ContentionHandlerは暫定実装＝競合時は常にCANCELへ倒す。本物の3択Swingダイアログはstep3で差し替える
         instanceLock = new SingleInstanceLock(AppDir.base(), System.out::println);
-        ContentionHandler provisionalHandler = new ContentionHandler() {
+        ContentionHandler contentionHandler = new ContentionHandler() {
             @Override
             public Choice onExistingInstance(InstanceInfo holder) {
-                System.err.println("同じベースフォルダで既に起動中のようです。起動を中止します。(pid="
-                    + holder.pid() + ")");
-                return Choice.CANCEL;
+                return showContentionDialog(holder);
             }
 
             @Override
             public Fallback onNoResponse(InstanceInfo holder) {
+                // TODO step4: 無応答時の2段フォールバック（強制終了 or 中止）をここで出す
                 return Fallback.CANCEL;
             }
         };
-        if (instanceLock.acquire(provisionalHandler) == AcquireResult.ABORTED) {
+        if (instanceLock.acquire(contentionHandler) == AcquireResult.ABORTED) {
             System.exit(0);
             return;
         }
@@ -240,6 +238,73 @@ public class Main {
             FatalErrorDialog.showAndExit(message + "\n\n" + ArgsParser.USAGE);
         }
         System.exit(1);
+    }
+
+    /**
+     * 既存インスタンスとの競合時に出す3択ダイアログ。ロック取得はmain()本体（非EDT）で走るため
+     * ここもEDT外から呼ばれる前提でinvokeAndWaitに包む。ただしFatalErrorDialogと同様、
+     * 万一EDT上から呼ばれた場合の保険としてisEventDispatchThread()で分岐しておく。
+     * ダイアログ表示自体に失敗した場合は安全側＝Choice.CANCELに倒す。
+     */
+    private static Choice showContentionDialog(InstanceInfo holder) {
+        if (SwingUtilities.isEventDispatchThread()) {
+            return showContentionDialogOnEdt(holder);
+        }
+        AtomicReference<Choice> result = new AtomicReference<>(Choice.CANCEL);
+        try {
+            SwingUtilities.invokeAndWait(() -> result.set(showContentionDialogOnEdt(holder)));
+        } catch (Exception e) {
+            System.err.println("競合ダイアログの表示に失敗した。起動を中止します: " + e.getMessage());
+        }
+        return result.get();
+    }
+
+    /**
+     * 実際のJOptionPane表示。FatalErrorDialogと同じ手口＝alwaysOnTopな一時的な無装飾JFrameを
+     * 親にすることで、他窓の裏に隠れず必ず最前面に出す。3ボタンの並びは
+     * 「既存を停止して起動」「起動を中止」「両方停止」で固定、既定選択（初期フォーカス）は
+     * 一番安全な「起動を中止」。×やEscapeでの close（CLOSED_OPTION）も含め、
+     * 0（既存を停止して起動）と2（両方停止）以外はすべてCANCELへ倒す。
+     */
+    private static Choice showContentionDialogOnEdt(InstanceInfo holder) {
+        JFrame owner = new JFrame();
+        owner.setAlwaysOnTop(true);
+        owner.setUndecorated(true);
+        owner.setLocationRelativeTo(null);
+        owner.setVisible(true); // alwaysOnTopを効かせるにはownerが表示されている必要がある
+
+        String[] options = {"既存を停止して起動", "起動を中止", "両方停止"};
+        int selected = JOptionPane.showOptionDialog(
+            owner,
+            buildContentionMessage(holder),
+            "kReminder — 起動の競合",
+            JOptionPane.DEFAULT_OPTION,
+            JOptionPane.WARNING_MESSAGE,
+            null,
+            options,
+            options[1]);
+
+        owner.dispose();
+
+        return switch (selected) {
+            case 0 -> Choice.STOP_EXISTING;
+            case 2 -> Choice.STOP_BOTH;
+            default -> Choice.CANCEL; // 1（起動を中止）／CLOSED_OPTION(-1)含め全部CANCEL
+        };
+    }
+
+    /** 競合ダイアログの本文。pidが-1（info読み取り失敗）のときはpid/startedAtを出さず一言添える。 */
+    private static String buildContentionMessage(InstanceInfo holder) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("同じベースフォルダを使う kReminder が既に起動しています。\n\n");
+        if (holder.pid() > 0) {
+            sb.append("pid: ").append(holder.pid()).append("\n");
+            sb.append("起動時刻: ").append(holder.startedAt()).append("\n");
+        } else {
+            sb.append("既存プロセスの情報ファイルが読めませんでした。\n");
+        }
+        sb.append("base: ").append(holder.base());
+        return sb.toString();
     }
 
     /**
