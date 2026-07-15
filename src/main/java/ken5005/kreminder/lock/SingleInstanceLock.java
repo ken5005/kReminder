@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 /**
@@ -25,6 +26,8 @@ public final class SingleInstanceLock {
     private static final String STOP_REQUEST_FILE_NAME = ".stop.request";
 
     private static final long POLL_INTERVAL_MS = 250L;
+    // destroy() / destroyForcibly() それぞれの後に何回tryLockを再試行するか（250ms間隔で約1秒分）
+    private static final int FORCE_KILL_RETRIES = 4;
 
     private final Path base;
     private final Consumer<String> log;
@@ -85,19 +88,55 @@ public final class SingleInstanceLock {
         return forceKillAndRetry(holder);
     }
 
+    /**
+     * 段階的な強制終了: destroy() → 約1秒リトライ → 効かなければ destroyForcibly() →
+     * 約1秒リトライ。どちらかの段階でロックが取れ次第、即 finishAcquire して ACQUIRED を返す。
+     * pid が既に存在しない（相手は既に死んでいる）場合は、破壊操作をスキップして
+     * tryLock を1回試すだけにする（もう死んでいるので待つ理由が無い）。
+     */
     private AcquireResult forceKillAndRetry(InstanceInfo holder) {
         if (holder.pid() <= 0) {
             log.accept("pid 不明のため force-kill できない");
             return AcquireResult.ABORTED;
         }
 
-        ProcessHandle.of(holder.pid()).ifPresentOrElse(
-                proc -> {
-                    proc.destroy();
-                    sleepQuietly(POLL_INTERVAL_MS);
-                },
-                () -> log.accept("force-kill 対象の pid が見つからない: " + holder.pid()));
+        Optional<ProcessHandle> procOpt = ProcessHandle.of(holder.pid());
+        if (procOpt.isEmpty()) {
+            log.accept("force-kill 対象の pid は既に存在しない。ロック再取得のみ試みる: " + holder.pid());
+            return tryAcquireOnce();
+        }
+        ProcessHandle proc = procOpt.get();
 
+        log.accept("既存プロセス(pid=" + holder.pid() + ")へ destroy() を送る");
+        proc.destroy();
+        if (tryAcquireWithRetries()) {
+            return AcquireResult.ACQUIRED;
+        }
+
+        log.accept("destroy() に応答が無いため destroyForcibly() に切り替える(pid=" + holder.pid() + ")");
+        proc.destroyForcibly();
+        if (tryAcquireWithRetries()) {
+            return AcquireResult.ACQUIRED;
+        }
+
+        log.accept("強制終了を試みたがロックを取得できなかった(pid=" + holder.pid() + ")");
+        return AcquireResult.ABORTED;
+    }
+
+    /** POLL_INTERVAL_MS間隔でFORCE_KILL_RETRIES回だけtryLockを試す。取れたらfinishAcquireまで済ませる。 */
+    private boolean tryAcquireWithRetries() {
+        for (int i = 0; i < FORCE_KILL_RETRIES; i++) {
+            sleepQuietly(POLL_INTERVAL_MS);
+            if (tryAcquireLock()) {
+                finishAcquire();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 相手が既に死んでいる場合の即時1回試行。 */
+    private AcquireResult tryAcquireOnce() {
         if (tryAcquireLock()) {
             finishAcquire();
             return AcquireResult.ACQUIRED;
@@ -129,8 +168,14 @@ public final class SingleInstanceLock {
         }
     }
 
-    /** ロック取得成功後の共通後処理: info書き込み + shutdown hook登録。 */
+    /**
+     * ロック取得成功後の共通後処理: 残存stop.request削除 + info書き込み + shutdown hook登録。
+     * 残存するstop.requestは「前ホルダー宛て、または自分がSTOP_EXISTINGで書いたもの」で
+     * 用済み＝ここで消しておかないと、force-killで相手が即死した直後に新ホルダーである自分が
+     * 自分の1秒Timerでこれを拾って誤って自殺する（stale stop.requestの自己修復も兼ねる）。
+     */
     private void finishAcquire() {
+        deleteQuietly(stopRequestFilePath());
         writeInfo();
         Runtime.getRuntime().addShutdownHook(new Thread(this::release));
     }
@@ -171,8 +216,16 @@ public final class SingleInstanceLock {
         return Files.exists(stopRequestFilePath());
     }
 
-    /** ロック解放 + FileChannel クローズ + .instance.info / .stop.request 削除。冪等・best-effort。 */
+    /**
+     * .instance.info / .stop.request 削除 + FileLock解放 + FileChannel クローズ。冪等・best-effort。
+     * 削除をロック解放より先に済ませる：逆順（先にロックを手放す）だと、手放した瞬間に
+     * 待っていた別プロセスがロックを取ってwriteInfo()した直後に、退場側の遅延した
+     * info削除が走って相手の新しい.instance.infoを消してしまう競合がありうるため。
+     */
     public void release() {
+        deleteQuietly(infoFilePath());
+        deleteQuietly(stopRequestFilePath());
+
         if (heldLock != null) {
             try {
                 heldLock.release();
@@ -183,9 +236,6 @@ public final class SingleInstanceLock {
         }
         closeQuietly(heldChannel);
         heldChannel = null;
-
-        deleteQuietly(infoFilePath());
-        deleteQuietly(stopRequestFilePath());
     }
 
     private Path lockFilePath() {

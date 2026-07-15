@@ -62,6 +62,14 @@ public class Main {
     private static TrayIcon trayIcon;
     private static HolidayStatus lastTrayStatus;
 
+    // 1秒ごとの発火判定・トレイ更新・stop.request監視を担うTimer。invokeLater内で生成するが、
+    // 自身のコールバックからtimer.stop()を呼べる必要があるためローカル変数ではなくstatic昇格させている
+    private static Timer timer;
+
+    // shutdownApp()の多重実行防止フラグ。トレイExit／窓close／stop.request検知の
+    // どの経路から呼ばれてもEDT上（同期不要）なので単純なbooleanガードでよい
+    private static boolean shutdownDone = false;
+
     // reminders.json の読み書き先。AppDir.resolve("reminders.json")で決まる
     private static ReminderStore store;
 
@@ -126,13 +134,12 @@ public class Main {
         ContentionHandler contentionHandler = new ContentionHandler() {
             @Override
             public Choice onExistingInstance(InstanceInfo holder) {
-                return showContentionDialog(holder);
+                return runOnEdtAndWait(() -> showContentionDialogOnEdt(holder), Choice.CANCEL);
             }
 
             @Override
             public Fallback onNoResponse(InstanceInfo holder) {
-                // TODO step4: 無応答時の2段フォールバック（強制終了 or 中止）をここで出す
-                return Fallback.CANCEL;
+                return runOnEdtAndWait(() -> showNoResponseDialogOnEdt(holder), Fallback.CANCEL);
             }
         };
         if (instanceLock.acquire(contentionHandler) == AcquireResult.ABORTED) {
@@ -183,9 +190,8 @@ public class Main {
             window.addWindowListener(new WindowAdapter() {
                 @Override
                 public void windowClosing(WindowEvent e) {
-                    DEB.shutdown();
-                    SND.shutdown();
-                    instanceLock.release();
+                    // EXIT_ON_CLOSEなのでこの後Swingが自分でJVMを落とす＝System.exitはここでは呼ばない
+                    shutdownApp();
                 }
             });
             window.setVisible(true);
@@ -197,13 +203,22 @@ public class Main {
 
             // TODO (known): past unfired reminders fire immediately on startup.
             //  A future version must decide: fire-immediately / skip / batch-notify.
-            Timer timer = new Timer(1000, e -> {
+            timer = new Timer(1000, e -> {
+                // 別プロセスから「既存を停止して起動」/「両方停止」を選ばれた合図。
+                // 通常の発火判定より先に見る＝stop.requestが立っていたら以降は一切進めず退去する
+                if (instanceLock.stopRequested()) {
+                    DEB.pr("別プロセスから停止要求を受信。終了します。");
+                    timer.stop();
+                    shutdownApp();
+                    System.exit(0);
+                    return;
+                }
                 checkReminders(reminders);
                 updateTrayStatus();
                 window.tick();
             });
             timer.start();
-            setupTray(timer);
+            setupTray();
         });
 
         // Background refresh — updates holidayRef when a newer CSV is fetched
@@ -241,50 +256,58 @@ public class Main {
     }
 
     /**
-     * 既存インスタンスとの競合時に出す3択ダイアログ。ロック取得はmain()本体（非EDT）で走るため
-     * ここもEDT外から呼ばれる前提でinvokeAndWaitに包む。ただしFatalErrorDialogと同様、
-     * 万一EDT上から呼ばれた場合の保険としてisEventDispatchThread()で分岐しておく。
-     * ダイアログ表示自体に失敗した場合は安全側＝Choice.CANCELに倒す。
+     * ロック競合まわりのダイアログはmain()本体（非EDT）から呼ばれる前提でinvokeAndWaitに包む。
+     * FatalErrorDialogと同様、万一EDT上から呼ばれた場合の保険としてisEventDispatchThread()で
+     * 分岐しておく。ダイアログ表示自体に失敗した場合は呼び出し側が渡すfallback（安全側の値）に倒す。
      */
-    private static Choice showContentionDialog(InstanceInfo holder) {
+    private static <T> T runOnEdtAndWait(java.util.function.Supplier<T> showDialog, T fallback) {
         if (SwingUtilities.isEventDispatchThread()) {
-            return showContentionDialogOnEdt(holder);
+            return showDialog.get();
         }
-        AtomicReference<Choice> result = new AtomicReference<>(Choice.CANCEL);
+        AtomicReference<T> result = new AtomicReference<>(fallback);
         try {
-            SwingUtilities.invokeAndWait(() -> result.set(showContentionDialogOnEdt(holder)));
+            SwingUtilities.invokeAndWait(() -> result.set(showDialog.get()));
         } catch (Exception e) {
-            System.err.println("競合ダイアログの表示に失敗した。起動を中止します: " + e.getMessage());
+            System.err.println("ダイアログの表示に失敗した。安全側へ倒します: " + e.getMessage());
         }
         return result.get();
     }
 
     /**
-     * 実際のJOptionPane表示。FatalErrorDialogと同じ手口＝alwaysOnTopな一時的な無装飾JFrameを
-     * 親にすることで、他窓の裏に隠れず必ず最前面に出す。3ボタンの並びは
-     * 「既存を停止して起動」「起動を中止」「両方停止」で固定、既定選択（初期フォーカス）は
-     * 一番安全な「起動を中止」。×やEscapeでの close（CLOSED_OPTION）も含め、
-     * 0（既存を停止して起動）と2（両方停止）以外はすべてCANCELへ倒す。
+     * JOptionPaneをalwaysOnTopな一時的な無装飾JFrame（FatalErrorDialogと同じ手口）を親にして出す。
+     * 親にnullを渡すと他窓の裏に隠れることがあるため、これで必ず最前面に出す。
      */
-    private static Choice showContentionDialogOnEdt(InstanceInfo holder) {
+    private static int showOwnedOptionDialog(String message, String title, String[] options, int defaultIndex) {
         JFrame owner = new JFrame();
         owner.setAlwaysOnTop(true);
         owner.setUndecorated(true);
         owner.setLocationRelativeTo(null);
         owner.setVisible(true); // alwaysOnTopを効かせるにはownerが表示されている必要がある
 
-        String[] options = {"既存を停止して起動", "起動を中止", "両方停止"};
         int selected = JOptionPane.showOptionDialog(
             owner,
-            buildContentionMessage(holder),
-            "kReminder — 起動の競合",
+            message,
+            title,
             JOptionPane.DEFAULT_OPTION,
             JOptionPane.WARNING_MESSAGE,
             null,
             options,
-            options[1]);
+            options[defaultIndex]);
 
         owner.dispose();
+        return selected;
+    }
+
+    /**
+     * 既存インスタンスとの競合時に出す3択。ボタン並びは
+     * 「既存を停止して起動」「起動を中止」「両方停止」で固定、既定選択（初期フォーカス）は
+     * 一番安全な「起動を中止」。×やEscapeでの close（CLOSED_OPTION）も含め、
+     * 0（既存を停止して起動）と2（両方停止）以外はすべてCANCELへ倒す。
+     */
+    private static Choice showContentionDialogOnEdt(InstanceInfo holder) {
+        String[] options = {"既存を停止して起動", "起動を中止", "両方停止"};
+        int selected = showOwnedOptionDialog(
+            buildContentionMessage(holder), "kReminder — 起動の競合", options, 1);
 
         return switch (selected) {
             case 0 -> Choice.STOP_EXISTING;
@@ -302,6 +325,28 @@ public class Main {
             sb.append("起動時刻: ").append(holder.startedAt()).append("\n");
         } else {
             sb.append("既存プロセスの情報ファイルが読めませんでした。\n");
+        }
+        sb.append("base: ").append(holder.base());
+        return sb.toString();
+    }
+
+    /**
+     * 退去要求を出したのに既存が timeout 内に応答しなかった場合の2択。
+     * 「強制終了して起動」→FORCE_KILL、「起動を中止」→CANCEL。既定選択は安全側のCANCEL。
+     */
+    private static Fallback showNoResponseDialogOnEdt(InstanceInfo holder) {
+        String[] options = {"強制終了して起動", "起動を中止"};
+        int selected = showOwnedOptionDialog(
+            buildNoResponseMessage(holder), "kReminder — 応答なし", options, 1);
+        return selected == 0 ? Fallback.FORCE_KILL : Fallback.CANCEL;
+    }
+
+    /** 無応答ダイアログの本文。pidが-1のときはpid行を出さない（競合ダイアログと同じ扱い）。 */
+    private static String buildNoResponseMessage(InstanceInfo holder) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("既存プロセスが応答しません。強制終了して起動しますか？\n\n");
+        if (holder.pid() > 0) {
+            sb.append("pid: ").append(holder.pid()).append("\n");
         }
         sb.append("base: ").append(holder.base());
         return sb.toString();
@@ -593,7 +638,26 @@ public class Main {
         nextPopupLocation = new Point(location.x + POPUP_OFFSET, location.y + POPUP_OFFSET);
     }
 
-    private static void setupTray(Timer timer) {
+    /**
+     * アプリの終了処理を1箇所に集約。トレイExit／窓close／stop.request検知のどの経路から
+     * 呼ばれてもここを通る。全経路EDT上（ActionListener・windowClosing・Timerコールバックは
+     * すべてEDTから呼ばれる）なので同期は不要。多重に呼ばれても副作用が起きないよう
+     * 冒頭でガードする（＝冪等）。System.exitは呼び出し側の事情が異なるためここには含めない
+     * （トレイExitはSystem.exit(0)を続けて呼ぶ／windowClosingはEXIT_ON_CLOSEがJVMを落とす）。
+     */
+    private static void shutdownApp() {
+        if (shutdownDone) return;
+        shutdownDone = true;
+
+        if (trayIcon != null) {
+            SystemTray.getSystemTray().remove(trayIcon);
+        }
+        DEB.shutdown();
+        SND.shutdown();
+        instanceLock.release();
+    }
+
+    private static void setupTray() {
         if (!SystemTray.isSupported()) return;
 
         HolidayStatus initialStatus = holidayRef.get().status();
@@ -605,10 +669,7 @@ public class Main {
         MenuItem exit = new MenuItem("Exit kReminder");
         exit.addActionListener(e -> {
             timer.stop();
-            SystemTray.getSystemTray().remove(trayIcon);
-            DEB.shutdown();
-            SND.shutdown();
-            instanceLock.release();
+            shutdownApp();
             System.exit(0);
         });
         popup.add(exit);
