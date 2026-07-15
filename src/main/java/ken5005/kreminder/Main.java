@@ -14,6 +14,12 @@ import ken5005.kreminder.holiday.HolidayService;
 import ken5005.kreminder.holiday.HolidayState;
 import ken5005.kreminder.holiday.HolidayStatus;
 import ken5005.kreminder.holiday.OverlayHolidayCheck;
+import ken5005.kreminder.lock.AcquireResult;
+import ken5005.kreminder.lock.Choice;
+import ken5005.kreminder.lock.ContentionHandler;
+import ken5005.kreminder.lock.Fallback;
+import ken5005.kreminder.lock.InstanceInfo;
+import ken5005.kreminder.lock.SingleInstanceLock;
 import ken5005.kreminder.sound.NotifyHandle;
 import ken5005.kreminder.sound.NotifyPatterns;
 import ken5005.kreminder.sound.NotifyStep;
@@ -58,6 +64,9 @@ public class Main {
 
     // reminders.json の読み書き先。AppDir.resolve("reminders.json")で決まる
     private static ReminderStore store;
+
+    // ベースフォルダ単位の単一プロセスロック。main()冒頭で確保し、終了経路でrelease()する
+    private static SingleInstanceLock instanceLock;
 
     // ⑤: showPopup（Extend導線）・checkReminders（(Ext)自動削除）からアクセスするため static 保持。
     // 従来はinvokeLater内のローカル変数だったが、両メソッドともstatic文脈から呼ばれるため昇格させた
@@ -111,6 +120,28 @@ public class Main {
             return;
         }
 
+        // 単一プロセスロック。この時点ではDEBが未初期化のためSystem.out::printlnをロガーとして渡す
+        // （lockパッケージ自体もDEBに依存させない＝他ツールへそのままコピーできる汎用実装にするため）。
+        // ContentionHandlerは暫定実装＝競合時は常にCANCELへ倒す。本物の3択Swingダイアログはstep3で差し替える
+        instanceLock = new SingleInstanceLock(AppDir.base(), System.out::println);
+        ContentionHandler provisionalHandler = new ContentionHandler() {
+            @Override
+            public Choice onExistingInstance(InstanceInfo holder) {
+                System.err.println("同じベースフォルダで既に起動中のようです。起動を中止します。(pid="
+                    + holder.pid() + ")");
+                return Choice.CANCEL;
+            }
+
+            @Override
+            public Fallback onNoResponse(InstanceInfo holder) {
+                return Fallback.CANCEL;
+            }
+        };
+        if (instanceLock.acquire(provisionalHandler) == AcquireResult.ABORTED) {
+            System.exit(0);
+            return;
+        }
+
         boolean fakeClockUsed = false;
         if (parsedArgs.fakeNow() != null) {
             LocalDateTime fakeNow = parsedArgs.fakeNow();
@@ -156,6 +187,7 @@ public class Main {
                 public void windowClosing(WindowEvent e) {
                     DEB.shutdown();
                     SND.shutdown();
+                    instanceLock.release();
                 }
             });
             window.setVisible(true);
@@ -511,6 +543,7 @@ public class Main {
             SystemTray.getSystemTray().remove(trayIcon);
             DEB.shutdown();
             SND.shutdown();
+            instanceLock.release();
             System.exit(0);
         });
         popup.add(exit);
