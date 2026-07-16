@@ -116,8 +116,9 @@ public class EditDialog extends JDialog {
         // 初期表示時点のプレビュー・OK活性を既存値に合わせておく
         updatePreview();
 
-        // 残り時間表示（「○○後」）を1秒ごとに再計算してライブ更新する
-        previewTimer = new Timer(1000, e -> updatePreview());
+        // 残り時間表示（「○○後」）を1秒ごとに再計算してライブ更新する。
+        // tick()が先＝相対指定（instantの+15m等）をnow基準で再解決してからプレビューに反映する
+        previewTimer = new Timer(1000, e -> { execTimeField.tick(); updatePreview(); });
         previewTimer.start();
 
         pack();

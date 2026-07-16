@@ -108,6 +108,11 @@ public class DateTimeField extends JPanel implements ExecTimeInput {
         return null;
     }
 
+    /** 絶対時刻ウィジェットで now に依存しないため何もしない。 */
+    @Override
+    public void tick() {
+    }
+
     private void addField(DateField field) {
         JTextField tf = new JTextField(field.width + FIELD_EXTRA_COLUMNS);
         tf.setEditable(false);
