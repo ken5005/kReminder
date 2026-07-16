@@ -24,6 +24,13 @@ git br -d feature/some-new-feature # mergeに--delete-branch付けてるなら�
 git tag v0.6
 git push origin v0.6
 
+よくわからんが、--no-ffで進めるって言われた時にやつ
+git checkout main
+git pull --ff-only
+git merge --no-ff feat/instant-unit-suffix
+git push
+途中vimが立ち上がったらESC→:wq→エンター
+
 ブランチじゃなくmainをいじっただけの時はこうする
 git add docs/覚書.txt
 git cm "覚書.txtを変更"
