@@ -48,7 +48,15 @@ class InstantTimeLogicTest {
             // 全角
             Arguments.of("＋１．２３", NOW.plusMinutes(1).plusSeconds(23)),
             Arguments.of("１２：３４", LocalDateTime.of(2026, 7, 12, 12, 34, 0)),
-            Arguments.of("１２。３４", NOW.plusMinutes(12).plusSeconds(34))
+            Arguments.of("１２。３４", NOW.plusMinutes(12).plusSeconds(34)),
+
+            // 単位サフィックス（s/m/h、小文字のみ・常に相対）
+            Arguments.of("15m", NOW.plusMinutes(15)),
+            Arguments.of("+15m", NOW.plusMinutes(15)),
+            Arguments.of("30s", NOW.plusSeconds(30)),
+            Arguments.of("2h", NOW.plusHours(2)),
+            Arguments.of("90m", NOW.plusMinutes(90)),
+            Arguments.of("72h", NOW.plusHours(72))   // 境界＝72時間ちょうどはOK
         );
     }
 
@@ -68,7 +76,10 @@ class InstantTimeLogicTest {
             Arguments.of("+123:45"),
             // 最上位フィールドの桁あふれ（相対）：long に収まる/収まらない両方
             Arguments.of("99999999999"),
-            Arguments.of("+99999999999999999999")
+            Arguments.of("+99999999999999999999"),
+            // 単位サフィックスの上限超過
+            Arguments.of("73h"),
+            Arguments.of("4321m")
         );
     }
 
@@ -103,7 +114,13 @@ class InstantTimeLogicTest {
             // 漏れていた境界
             Arguments.of("+1.60"),   // 相対の秒60
             Arguments.of("+1:60"),   // 相対の分60
-            Arguments.of("1.2:3")    // '.' の後に ':' が来る
+            Arguments.of("1.2:3"),   // '.' の後に ':' が来る
+            // 単位サフィックスの文法エラー
+            Arguments.of("1:30m"),   // コロンとの併用
+            Arguments.of("1.30s"),   // 小数点との併用
+            Arguments.of("15M"),     // 大文字は対象外
+            Arguments.of("1.5h"),    // 数値部が小数
+            Arguments.of("15x")      // 未知の単位
         );
     }
 
@@ -119,7 +136,7 @@ class InstantTimeLogicTest {
     void grammarErrorMessageIsTheSpecifiedHelpText() {
         InstantTimeLogic.Result result = InstantTimeLogic.parse("abc", NOW);
         assertEquals(
-            "時刻入力エラー  例) 25=25分後 / +1:30=1時間30分後 / 0.25=25秒後 / "
+            "時刻入力エラー  例) 25=25分後 / +1:30=1時間30分後 / 0.25=25秒後 / 15m=15分後 / "
                 + "12:34=今日の12:34（過ぎたら翌日） ※最上位以外の桁は2桁必須",
             result.error());
     }
