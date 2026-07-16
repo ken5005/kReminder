@@ -20,7 +20,7 @@ public final class InstantTimeLogic {
 
     private static final String OVER_LIMIT_ERROR = "3日以上は指定出来ません";
     private static final String GRAMMAR_ERROR =
-        "時刻入力エラー  例) 25=25分後 / +1:30=1時間30分後 / 0.25=25秒後 / "
+        "時刻入力エラー  例) 25=25分後 / +1:30=1時間30分後 / 0.25=25秒後 / 15m=15分後 / "
             + "12:34=今日の12:34（過ぎたら翌日） ※最上位以外の桁は2桁必須";
 
     /** 成功なら fireAt 非null・error null。失敗なら fireAt null・error 非null（表示用メッセージ）。 */
@@ -43,6 +43,15 @@ public final class InstantTimeLogic {
         // 先頭 + の有無を記録して除去（+ が判定ルールの起点）
         boolean hasPlus = normalized.startsWith("+");
         String body = hasPlus ? normalized.substring(1) : normalized;
+
+        // 単位サフィックス（s/m/h、小文字のみ）＝ 常に相対。既存の [時:]分[.秒] ルートより先に判定し、
+        // 該当すれば専用ルートへ分岐する（: や . との併用は numberPart の isDigits チェックで自然に弾かれる）。
+        if (!body.isEmpty()) {
+            char lastChar = body.charAt(body.length() - 1);
+            if (lastChar == 's' || lastChar == 'm' || lastChar == 'h') {
+                return parseUnitSuffix(body, lastChar, now);
+            }
+        }
 
         // '.' で1回だけ split → 左側が [時:]分、右側が秒（無ければ null）
         String[] dotParts = splitOnce(body, '.');
@@ -95,6 +104,33 @@ public final class InstantTimeLogic {
             ? topVal * 3600 + (long) midVal * 60 + secVal
             : topVal * 60 + secVal;
         Duration duration = Duration.ofSeconds(totalSeconds);
+        if (duration.compareTo(MAX_RELATIVE) > 0) return Result.err(OVER_LIMIT_ERROR);
+        return Result.ok(now.withNano(0).plus(duration));
+    }
+
+    /**
+     * 単位サフィックス（15m / 30s / 2h）専用ルート。常に相対。
+     * body は末尾に unit（s/m/h）を含んだままの文字列＝先頭側が数値部。
+     */
+    private static Result parseUnitSuffix(String body, char unit, LocalDateTime now) {
+        String numberPart = body.substring(0, body.length() - 1);
+        if (!isDigits(numberPart)) return Result.err(GRAMMAR_ERROR);
+
+        long numberVal;
+        try {
+            numberVal = Long.parseLong(numberPart);
+        } catch (NumberFormatException e) {
+            return Result.err(OVER_LIMIT_ERROR);
+        }
+        // 乗算前の安全域足切り（[時:]分ルートの topVal と同じ考え方）
+        if (numberVal > RELATIVE_TOP_SAFE_LIMIT) return Result.err(OVER_LIMIT_ERROR);
+
+        long secondsPerUnit = switch (unit) {
+            case 'h' -> 3600L;
+            case 'm' -> 60L;
+            default -> 1L; // 's'
+        };
+        Duration duration = Duration.ofSeconds(numberVal * secondsPerUnit);
         if (duration.compareTo(MAX_RELATIVE) > 0) return Result.err(OVER_LIMIT_ERROR);
         return Result.ok(now.withNano(0).plus(duration));
     }
