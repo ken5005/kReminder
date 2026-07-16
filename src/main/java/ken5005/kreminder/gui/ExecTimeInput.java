@@ -30,4 +30,10 @@ public interface ExecTimeInput {
 
     /** 入力不正時の説明。正常時は null。 */
     String getErrorHelp();
+
+    /**
+     * ダイアログ表示中に定期的（1秒ごと）に呼ばれる。相対時刻を now 基準で再解決するためのフック。
+     * 表示更新は呼び出し側（EditDialog.updatePreview）が担うので、この中で ChangeListener を発火してはならない。
+     */
+    void tick();
 }

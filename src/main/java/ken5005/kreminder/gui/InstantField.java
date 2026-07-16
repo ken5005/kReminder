@@ -98,4 +98,13 @@ public class InstantField extends JPanel implements ExecTimeInput {
     public String getErrorHelp() {
         return result.error();
     }
+
+    /**
+     * 毎秒呼ばれ、現在のテキストを最新の now で再パースする（listener は発火しない）。
+     * 相対入力（+15m等）はこれで now に追従し続け、絶対入力（12:34等）は結果が変わらず自然に固定される。
+     */
+    @Override
+    public void tick() {
+        result = InstantTimeLogic.parse(textField.getText(), LocalDateTime.now(clock));
+    }
 }
