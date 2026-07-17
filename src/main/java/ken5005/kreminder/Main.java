@@ -534,7 +534,45 @@ public class Main {
 
         if (notifyingHandle != null) notifyingHandle.stop();
         notifyingEntry = best;
-        notifyingHandle = Notifier.start(NotifyPatterns.forPriority(best.reminder().priority));
+        // ループで再代入されるbestをラムダで捕まえるためfinalなローカルへ退避
+        PopupEntry ringing = best;
+        notifyingHandle = Notifier.start(
+            NotifyPatterns.forPriority(best.reminder().priority),
+            () -> SwingUtilities.invokeLater(() -> flashPopup(ringing.dialog())));
+    }
+
+    /** 指定ポップアップの背景を赤にして通常背景へフェードする。EDTで呼ぶこと。多重発火は赤から仕切り直す。 */
+    private static void flashPopup(JDialog dialog) {
+        if (dialog == null || !dialog.isDisplayable()) return;
+        var root = dialog.getRootPane();
+        Object prev = root.getClientProperty("kreminder.flashTimer");
+        if (prev instanceof Timer t) t.stop(); // 進行中のフェードを止めて赤からやり直す
+        Container content = dialog.getContentPane();
+        Color flash = new Color(Const.POPUP_FLASH_RGB);
+        Color base = new Color(Const.POPUP_BG_RGB);
+        content.setBackground(flash);
+        content.repaint();
+        int stepMs = 50;
+        int steps = Math.max(1, Const.POPUP_FLASH_FADE_MS / stepMs);
+        int[] i = {0};
+        Timer timer = new Timer(stepMs, null);
+        timer.addActionListener(e -> {
+            if (!dialog.isDisplayable()) { timer.stop(); return; } // 閉じたら止める
+            i[0]++;
+            float f = Math.min(1f, (float) i[0] / steps);
+            content.setBackground(lerpColor(flash, base, f));
+            content.repaint();
+            if (f >= 1f) { content.setBackground(base); timer.stop(); }
+        });
+        root.putClientProperty("kreminder.flashTimer", timer);
+        timer.start();
+    }
+
+    private static Color lerpColor(Color a, Color b, float t) {
+        int r = Math.round(a.getRed() + (b.getRed() - a.getRed()) * t);
+        int g = Math.round(a.getGreen() + (b.getGreen() - a.getGreen()) * t);
+        int bl = Math.round(a.getBlue() + (b.getBlue() - a.getBlue()) * t);
+        return new Color(r, g, bl);
     }
 
     private static void showPopup(Reminder r) {
@@ -602,6 +640,7 @@ public class Main {
         if (notifyingEntry != entry) {
             NotifyStep firstStep = NotifyPatterns.forPriority(r.priority).steps().get(0);
             SND.play(firstStep.soundName(), firstStep.volume());
+            flashPopup(dialog); // 担当外でも新着に気づけるよう1回だけ光らせる
         }
 
         // OK（dispose()）・Extend（OK登録時のdispose()）・×（DISPOSE_ON_CLOSE）のどれで閉じても

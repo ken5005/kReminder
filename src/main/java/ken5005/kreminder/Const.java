@@ -16,4 +16,6 @@ public final class Const {
     public static final int FONT_SIZE_DATETIME_SEP = 18;   // 日時入力ウィジェットの区切り記号
 
     public static final int POPUP_BG_RGB = 0xDDDDDD;       // 発火ポップアップの背景色
+    public static final int POPUP_FLASH_RGB = 0xFF8080;    // 発火フラッシュの色（薄い赤）。手で調整可
+    public static final int POPUP_FLASH_FADE_MS = 1000;    // 赤→通常背景へ戻すフェード時間(ms)
 }
