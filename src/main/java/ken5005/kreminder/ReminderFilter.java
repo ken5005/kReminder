@@ -48,6 +48,7 @@ public final class ReminderFilter {
             case HOUR:   return spec.getRepeatVal() / 24;
             case DAY:    return spec.getRepeatVal();
             case MONTH:  return spec.getRepeatVal() * 30;
+            case YEAR:   return spec.getRepeatVal() * 365;
             default: throw new IllegalStateException("unknown unit: " + spec.getUnit());
         }
     }

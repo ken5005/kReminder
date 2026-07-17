@@ -81,6 +81,49 @@ class RepeatSpecTest {
             () -> RepeatSpec.parse("rep=1d;kuriage;ex=0"));
     }
 
+    // rep=y（毎年）— 数字必須（bareは不可）／day=・kuriageは月次専用のまま
+    @Test
+    void yearlyUnitRejectsBareAndMonthlyOnlyCommands() {
+        // bare の rep=y は不可（他単位と同じくparseInt("")が例外）
+        assertThrows(IllegalArgumentException.class,
+            () -> RepeatSpec.parse("rep=y"));
+        // day=N は月次(M)専用のまま
+        assertThrows(IllegalArgumentException.class,
+            () -> RepeatSpec.parse("rep=1y;day=25"));
+        // kuriage も月次(M)専用のまま
+        assertThrows(IllegalArgumentException.class,
+            () -> RepeatSpec.parse("rep=1y;kuriage"));
+    }
+
+    // rep=1y — 通常年・うるう日clamp・clamp後は留まる（29に戻らない）
+    @Test
+    void yearlyNext() {
+        assertDoesNotThrow(() -> RepeatSpec.parse("rep=1y"));
+
+        RepeatSpec spec = RepeatSpec.parse("rep=1y");
+
+        // 通常年: 2026-03-10 → 2027-03-10
+        LocalDateTime normal = LocalDateTime.of(2026, 3, 10, 8, 0);
+        assertEquals(LocalDateTime.of(2027, 3, 10, 8, 0), spec.next(normal));
+
+        // うるう日起点: 2024-02-29 → 2025-02-28（plusYearsのclamp）
+        LocalDateTime leapDay = LocalDateTime.of(2024, 2, 29, 8, 0);
+        LocalDateTime afterClamp = spec.next(leapDay);
+        assertEquals(LocalDateTime.of(2025, 2, 28, 8, 0), afterClamp);
+
+        // clamp後さらにnext → 2026-02-28（29に戻らないことを固定）
+        assertEquals(LocalDateTime.of(2026, 2, 28, 8, 0), spec.next(afterClamp));
+    }
+
+    // rep=1y — nextAfter取りこぼしスキップ
+    @Test
+    void yearlyCatchUpSkip() {
+        RepeatSpec spec = RepeatSpec.parse("rep=1y");
+        LocalDateTime from = LocalDateTime.of(2020, 5, 1, 8, 0);
+        LocalDateTime now  = LocalDateTime.of(2023, 6, 1, 8, 0);
+        assertEquals(LocalDateTime.of(2024, 5, 1, 8, 0), spec.nextAfter(from, now));
+    }
+
     // 回帰: 月次 kuriage は従来どおり parse が通る
     @Test
     void monthlyKuriageStillParses() {
@@ -153,6 +196,8 @@ class RepeatSpecTest {
             args("rep=7d", "毎週"),
             args("rep=1M", "毎月"),
             args("rep=12M", "毎年"),
+            args("rep=1y", "毎年"),
+            args("rep=2y", "毎2年"),
             // 倍数畳み／端数
             args("rep=14d", "毎2週"),
             args("rep=21d", "毎3週"),
