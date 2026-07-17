@@ -47,6 +47,7 @@ public final class HolidayOverride {
     public static OverlayHolidayCheck load(ken5005.kreminder.HolidayCheck base) {
         Path path = getOverridePath();
         if (!Files.exists(path)) {
+            System.out.println("HolidayOverride: holiday_override.json が見つかりません（手動オーバレイ無しで起動）");
             return new OverlayHolidayCheck(base, Map.of(), Set.of());
         }
         try (Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
