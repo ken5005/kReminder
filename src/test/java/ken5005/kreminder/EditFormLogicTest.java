@@ -108,6 +108,22 @@ class EditFormLogicTest {
     }
 
     @Test
+    void buildPreview_repValid_correctsFirstOccurrenceToMatchingCondition() {
+        // rep=1d;in=4（木のみ）: 入力が火曜(2026-06-02)でも、初回は直後の木曜(2026-06-04)に補正される
+        LocalDateTime now = LocalDateTime.of(2026, 6, 1, 7, 0);
+        String result = EditFormLogic.buildPreview("2026-06-02 08:00:00", "rep=1d;in=4", now, HolidayCheck.NONE);
+
+        StringBuilder expected = new StringBuilder("3日1時間後");
+        LocalDateTime t = LocalDateTime.of(2026, 6, 4, 8, 0, 0);
+        for (int i = 0; i < 10; i++) {
+            expected.append("\n").append(t.toLocalDate()).append(" ")
+                .append(String.format("%02d:%02d:%02d", t.getHour(), t.getMinute(), t.getSecond()));
+            t = t.plusDays(7);
+        }
+        assertEquals(expected.toString(), result);
+    }
+
+    @Test
     void buildPreview_repInvalid_showsHelp() {
         LocalDateTime now = LocalDateTime.of(2026, 6, 24, 10, 0);
         String result = EditFormLogic.buildPreview("2026-06-24 15:30:00", "rep=1d;foo=3", now, HolidayCheck.NONE);
