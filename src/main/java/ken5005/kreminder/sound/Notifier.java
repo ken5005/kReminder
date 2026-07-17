@@ -19,15 +19,20 @@ public final class Notifier {
     }
 
     public static NotifyHandle start(NotifyPattern pattern) {
+        return start(pattern, () -> {});
+    }
+
+    /** onRingは各ステップのSND.play直前（＝実際に音が鳴るたび）に呼ばれる。通知スレッド上での呼び出しなのでEDT操作は呼び出し側でinvokeLaterすること。 */
+    public static NotifyHandle start(NotifyPattern pattern, Runnable onRing) {
         AtomicBoolean stopRequested = new AtomicBoolean(false);
-        Thread thread = new Thread(() -> run(pattern, stopRequested), "kReminder-Notifier");
+        Thread thread = new Thread(() -> run(pattern, stopRequested, onRing), "kReminder-Notifier");
         thread.setDaemon(true);
         thread.setPriority(Thread.MIN_PRIORITY);
         thread.start();
         return new NotifyHandle(thread, stopRequested);
     }
 
-    private static void run(NotifyPattern pattern, AtomicBoolean stopRequested) {
+    private static void run(NotifyPattern pattern, AtomicBoolean stopRequested, Runnable onRing) {
         try {
             long deadline = pattern.maxDuration() != null
                     ? System.currentTimeMillis() + pattern.maxDuration().toMillis()
@@ -36,6 +41,7 @@ public final class Notifier {
             // (1) steps を頭から1回流す
             for (NotifyStep step : pattern.steps()) {
                 if (stopRequested.get() || System.currentTimeMillis() >= deadline) return;
+                safeRing(onRing);
                 SND.play(step.soundName(), step.volume());
                 if (!sleepSliced(step.delayAfterMs(), stopRequested, deadline)) return;
             }
@@ -47,6 +53,7 @@ public final class Notifier {
                 while (!stopRequested.get() && System.currentTimeMillis() < deadline) {
                     for (NotifyStep step : tail) {
                         if (stopRequested.get() || System.currentTimeMillis() >= deadline) return;
+                        safeRing(onRing);
                         SND.play(step.soundName(), step.volume());
                         if (!sleepSliced(step.delayAfterMs(), stopRequested, deadline)) return;
                     }
@@ -54,6 +61,15 @@ public final class Notifier {
             }
         } catch (Exception e) {
             // デバッグ機能・サブシステムの異常で本体を止めない、という全体方針の延長
+            DEB.pr(e);
+        }
+    }
+
+    /** onRingが投げても通知スレッドを殺さない（既存のtop-level catchとは別の個別ガード）。 */
+    private static void safeRing(Runnable onRing) {
+        try {
+            onRing.run();
+        } catch (Exception e) {
             DEB.pr(e);
         }
     }
