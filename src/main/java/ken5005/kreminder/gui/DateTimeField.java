@@ -1,5 +1,6 @@
 package ken5005.kreminder.gui;
 
+import ken5005.kreminder.Const;
 import ken5005.kreminder.DateField;
 import ken5005.kreminder.DateTimeFieldLogic;
 import ken5005.kreminder.DateTimeFieldState;
@@ -27,9 +28,7 @@ public class DateTimeField extends JPanel implements ExecTimeInput {
 
     private static final Color ACTIVE_BG = new Color(200, 220, 255);
 
-    // 欄の見た目サイズはここにまとめる（3つ独立して調整可）
-    private static final int FIELD_FONT_SIZE = 18;      // JTextField（数字欄）のフォントサイズ
-    private static final int SEPARATOR_FONT_SIZE = 18;  // 区切りJLabel（-, :, 空白）のフォントサイズ
+    // 欄の見た目サイズはここにまとめる（フォントサイズはConstへ集約済み。ここでは欄幅の余白のみ）
     private static final int FIELD_EXTRA_COLUMNS = 1;   // JTextFieldの桁数(欄幅)に足す余白。欄そのものの横幅を広げる
 
     private final EnumMap<DateField, JTextField> fields = new EnumMap<>(DateField.class);
@@ -117,7 +116,7 @@ public class DateTimeField extends JPanel implements ExecTimeInput {
         JTextField tf = new JTextField(field.width + FIELD_EXTRA_COLUMNS);
         tf.setEditable(false);
         tf.setFocusable(false); // キャレット編集させない。フォーカスはパネル代表で受ける
-        tf.setFont(new Font(Font.MONOSPACED, Font.PLAIN, FIELD_FONT_SIZE));
+        tf.setFont(new Font(Font.MONOSPACED, Font.PLAIN, Const.FONT_SIZE_DATETIME_FIELD));
         tf.setHorizontalAlignment(JTextField.CENTER);
         tf.addMouseListener(new MouseAdapter() {
             @Override
@@ -133,7 +132,7 @@ public class DateTimeField extends JPanel implements ExecTimeInput {
 
     private void addSeparator(String text) {
         JLabel label = new JLabel(text);
-        label.setFont(label.getFont().deriveFont((float) SEPARATOR_FONT_SIZE));
+        label.setFont(label.getFont().deriveFont((float) Const.FONT_SIZE_DATETIME_SEP));
         add(label);
     }
 
