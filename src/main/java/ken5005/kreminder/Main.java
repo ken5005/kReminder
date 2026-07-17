@@ -176,7 +176,14 @@ public class Main {
             // storeも同様に単一インスタンスをMainWindow/checkReminders双方に渡し、
             // 読み書き先（Path）を一致させる（AppDir切り替え時の食い違い防止）。
             // store自体はmain()冒頭でAppDir.resolve済みでここではload()するだけ
+            //
+            // 「不在だったか」はDEB.init（この少し下）より前の時点でしか判定できないため、
+            // ここでbooleanに捕まえておき、実際の報告（DEB.pr）はDEB初期化後にまとめて行う。
+            boolean remindersWasAbsent = !Files.exists(store.getPath());
+            boolean configWasAbsent = !Files.exists(Config.configFilePath());
+
             List<Reminder> reminders = store.load();
+            if (remindersWasAbsent) store.save(reminders); // 空リストのまま reminders.json を実体化する
             window = new MainWindow(clock, reminders, store);
             PanelSink panelSink = new PanelSink(window.getDebugTextArea());
             DEB.init(clock, new ConsoleSink(), new FileSink(clock), panelSink);
@@ -200,6 +207,8 @@ public class Main {
             DEB.pr("reminders読込先: " + store.getPath());
             DEB.pr("reminders読込: " + reminders.size() + "件");
             DEB.pr("祝日loadInitial: " + initial.status());
+            if (configWasAbsent) DEB.pr("config.properties が見つかりません。作成しました。");
+            if (remindersWasAbsent) DEB.pr("reminders.json が見つかりません。作成しました。");
 
             // TODO (known): past unfired reminders fire immediately on startup.
             //  A future version must decide: fire-immediately / skip / batch-notify.
@@ -373,6 +382,7 @@ public class Main {
             String template = SoundMapParser.renderTemplate(wavFiles);
             try {
                 Files.writeString(soundMapPath, template, StandardCharsets.UTF_8);
+                DEB.pr("sound-map.properties が見つかりません。作成しました。");
             } catch (IOException e) {
                 DEB.pr("sound-map.properties の書き出しに失敗: " + e.getMessage());
             }
