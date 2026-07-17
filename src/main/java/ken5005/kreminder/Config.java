@@ -45,7 +45,12 @@ public class Config {
     }
 
     private static Path buildConfigPath() {
-        return configDir().resolve(FILE_NAME);
+        return configFilePath();
+    }
+
+    /** テストや Main から config.properties の実パスを直接参照するための入口。 */
+    public static Path configFilePath() {
+        return AppDir.base().resolve(FILE_NAME);
     }
 
     /** config.properties と同じベースフォルダで sound-map.properties を指す。 */
@@ -57,9 +62,15 @@ public class Config {
         return AppDir.base();
     }
 
-    /** ファイル無し・I/O失敗はデフォルト値を維持したまま return する。キー欠けも同様。 */
+    /**
+     * ファイル無しはデフォルト値のまま save() して実体化してから return する
+     * （初回起動時に config.properties を生えさせるため）。I/O失敗・キー欠けはデフォルト値を維持する。
+     */
     public void load() {
-        if (!Files.exists(configPath)) return;
+        if (!Files.exists(configPath)) {
+            save();
+            return;
+        }
 
         Properties props = new Properties();
         try (InputStream in = Files.newInputStream(configPath)) {

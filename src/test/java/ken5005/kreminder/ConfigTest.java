@@ -7,7 +7,9 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Properties;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -39,7 +41,7 @@ class ConfigTest {
     }
 
     @Test
-    void loadWithoutFileKeepsDefaults(@TempDir Path tmp) {
+    void loadWithoutFileKeepsDefaultsAndMaterializesFile(@TempDir Path tmp) throws IOException {
         Path configPath = tmp.resolve("nonexistent.properties");
 
         Config config = new Config(configPath);
@@ -51,6 +53,20 @@ class ConfigTest {
         assertFalse(config.isShowFar());
         assertTrue(config.isShowLowPriority());
         assertFalse(config.isShowAllRepeat());
+
+        // 不在だったファイルが load() 時点でデフォルト値のまま実体化されていること
+        assertTrue(Files.exists(configPath));
+        Properties saved = new Properties();
+        try (var in = Files.newInputStream(configPath)) {
+            saved.load(in);
+        }
+        assertEquals("false", saved.getProperty("filter.showEnded"));
+        assertEquals("true", saved.getProperty("filter.showImminent"));
+        assertEquals("true", saved.getProperty("filter.showSoon"));
+        assertEquals("false", saved.getProperty("filter.showFar"));
+        assertEquals("true", saved.getProperty("filter.showLowPriority"));
+        assertEquals("false", saved.getProperty("filter.showAllRepeat"));
+        assertEquals("C:\\tools2\\etc\\wav", saved.getProperty("snd.wav.dir"));
     }
 
     @Test
