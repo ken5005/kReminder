@@ -545,6 +545,7 @@ public class Main {
         JDialog dialog = new JDialog((Frame) null, "kReminder", false);
         dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
         dialog.setLayout(new BorderLayout(10, 10));
+        dialog.getContentPane().setBackground(new Color(Const.POPUP_BG_RGB)); // 発火ポップアップの背景色（Const参照）
 
         String text = r.message != null ? r.message : "(no message)";
         JLabel label = new JLabel("<html>" + text.replace("\n", "<br>") + "</html>");
@@ -555,6 +556,7 @@ public class Main {
         ok.addActionListener(e -> dialog.dispose());
 
         JPanel south = new JPanel();
+        south.setOpaque(false); // contentPaneの背景色（薄い灰色）を透かして見せるため
         south.add(ok);
         // showExtend=false（Pri1）ならExtendボタンはそもそも生成・配置しない＝OKのみ（GUI仕様v2 §5.1）
         if (behavior.showExtend()) {

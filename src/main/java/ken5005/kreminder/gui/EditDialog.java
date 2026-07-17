@@ -1,5 +1,6 @@
 package ken5005.kreminder.gui;
 
+import ken5005.kreminder.Const;
 import ken5005.kreminder.EditFormLogic;
 import ken5005.kreminder.HolidayCheck;
 import ken5005.kreminder.Reminder;
@@ -67,6 +68,12 @@ public class EditDialog extends JDialog {
         priorityCombo.setSelectedItem(original.priority);
         commentField.setText(original.message == null ? "" : original.message);
         cmdField.setText(original.action == null ? "" : original.action);
+
+        // 入力欄フォント拡大（execTimeFieldの内部数字欄はConst.FONT_SIZE_DATETIME_FIELD側で制御済み・ここでは触らない）
+        setFontSize(repeatField, Const.FONT_SIZE_EDIT_FIELD);
+        setFontSize(commentField, Const.FONT_SIZE_EDIT_FIELD);
+        setFontSize(cmdField, Const.FONT_SIZE_EDIT_FIELD);
+        setFontSize(priorityCombo, Const.FONT_SIZE_EDIT_FIELD);
 
         previewArea.setEditable(false);
         // 横スクロールを出さず、長い行（Usageヘルプ等）は折り返し表示にする
@@ -189,7 +196,9 @@ public class EditDialog extends JDialog {
         gbc.gridx = 0;
         gbc.gridwidth = 1;
         gbc.weightx = 0;
-        panel.add(new JLabel(label), gbc);
+        JLabel labelComponent = new JLabel(label);
+        setFontSize(labelComponent, Const.FONT_SIZE_EDIT_LABEL);
+        panel.add(labelComponent, gbc);
         gbc.gridx = 1;
         gbc.weightx = 1;
         panel.add(field, gbc);
@@ -262,5 +271,10 @@ public class EditDialog extends JDialog {
 
     public String getCmdText() {
         return cmdField.getText();
+    }
+
+    /** フォントサイズだけを差し替える（ファミリ・スタイルはderiveFontで維持）。 */
+    private static void setFontSize(JComponent c, int size) {
+        c.setFont(c.getFont().deriveFont((float) size));
     }
 }

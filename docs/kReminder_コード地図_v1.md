@@ -85,6 +85,7 @@ kReminder は「純関数層／Swing器層／静的ファサード＋ワーカ�
 | `Args` | 起動引数のパース結果（record） | （葉） |
 | `ArgsParser` | 起動引数のパース純関数（Usage文言の置き場） | → Args |
 | `HolidayCheck` | 祝日判定の抽象（`@FunctionalInterface`・`isHoliday`＋`NONE`） | （葉・実装はholiday） |
+| `Const` | ユーザー調整用の定数集約（フォントサイズ・色） | （葉） |
 
 ### 3.2 `gui` — Swing の器
 

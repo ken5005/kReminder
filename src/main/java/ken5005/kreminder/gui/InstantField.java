@@ -1,5 +1,6 @@
 package ken5005.kreminder.gui;
 
+import ken5005.kreminder.Const;
 import ken5005.kreminder.InstantTimeLogic;
 
 import javax.swing.JComponent;
@@ -32,6 +33,7 @@ public class InstantField extends JPanel implements ExecTimeInput {
     public InstantField(Clock clock) {
         this.clock = clock;
         setLayout(new BorderLayout());
+        textField.setFont(textField.getFont().deriveFont((float) Const.FONT_SIZE_EDIT_FIELD));
         add(textField, BorderLayout.CENTER);
 
         // 空欄からスタート＝§4.4「空欄はエラー」を初手から反映しておく
