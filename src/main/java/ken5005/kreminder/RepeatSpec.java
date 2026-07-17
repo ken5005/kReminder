@@ -126,14 +126,8 @@ public final class RepeatSpec {
 
         for (int i = 0; i < CAP; i++) {
             cal = advance(cal, currentUnit, currentVal);
-            int idx = holiday.isHoliday(cal.toLocalDate()) ? 0
-                : (cal.getDayOfWeek().getValue() % 7);
-            int wom = (cal.getDayOfMonth() - 1) / 7 + 1;
 
-            boolean dayOk  = !excluded[idx];
-            boolean weekOk = (allowedWeeks == null) || allowedWeeks.contains(wom);
-
-            if (dayOk && weekOk) return cal;
+            if (placementOk(cal, holiday)) return cal;
 
             if (currentUnit == Unit.MONTH) {
                 currentUnit = Unit.DAY;
@@ -141,6 +135,42 @@ public final class RepeatSpec {
             }
         }
         throw new IllegalStateException("no next date found for: " + raw);
+    }
+
+    // その日が配置条件（除外曜日・許可週）を満たすかどうか。next()とfirstOnOrAfter()で共有する
+    private boolean placementOk(LocalDateTime cal, HolidayCheck holiday) {
+        int idx = holiday.isHoliday(cal.toLocalDate()) ? 0
+            : (cal.getDayOfWeek().getValue() % 7);
+        int wom = (cal.getDayOfMonth() - 1) / 7 + 1;
+
+        boolean dayOk  = !excluded[idx];
+        boolean weekOk = (allowedWeeks == null) || allowedWeeks.contains(wom);
+        return dayOk && weekOk;
+    }
+
+    /**
+     * 起点 anchor 以降で最初に配置条件を満たす発火日時を返す（時分秒は anchor のまま据え置き）。
+     * 単位が DAY/MONTH/YEAR のときのみ補正し、それ以外(h/m/s)は anchor をそのまま返す。
+     * anchor 自身の日付が条件を満たすなら anchor（＝補正なし）。満たさなければ next(anchor) を返す。
+     */
+    public LocalDateTime firstOnOrAfter(LocalDateTime anchor, HolidayCheck holiday) {
+        if (unit != Unit.DAY && unit != Unit.MONTH && unit != Unit.YEAR) return anchor;
+
+        LocalDateTime cand = anchor;
+        if (absDay != 0) {
+            int clamped = Math.min(absDay, cand.toLocalDate().lengthOfMonth());
+            cand = cand.withDayOfMonth(clamped);
+        }
+
+        // candの日付がanchorの日付以降 かつ 配置条件を満たすならcand（時分秒は据え置き済み）
+        if (!cand.toLocalDate().isBefore(anchor.toLocalDate()) && placementOk(cand, holiday)) {
+            return cand;
+        }
+        return next(anchor, holiday);
+    }
+
+    public LocalDateTime firstOnOrAfter(LocalDateTime anchor) {
+        return firstOnOrAfter(anchor, HolidayCheck.NONE);
     }
 
     public LocalDateTime nextAfter(LocalDateTime from, LocalDateTime now) {

@@ -5,9 +5,11 @@ import ken5005.kreminder.CopyName;
 import ken5005.kreminder.EditFormLogic;
 import ken5005.kreminder.ExtName;
 import ken5005.kreminder.FilterState;
+import ken5005.kreminder.HolidayCheck;
 import ken5005.kreminder.Reminder;
 import ken5005.kreminder.ReminderFilter;
 import ken5005.kreminder.ReminderStore;
+import ken5005.kreminder.RepeatSpec;
 import ken5005.kreminder.debug.DEB;
 
 import javax.swing.*;
@@ -226,6 +228,25 @@ public class MainWindow extends JFrame {
     }
 
     /**
+     * 実行時刻を、繰り返し条件（曜日限定・第N週限定・月固定日等）に合わせて黙って補正する。
+     * repeatが空、またはparse失敗（不正repeat）なら無補正でbaseをそのまま返す。
+     * 編集経路・新規/instant経路の両方（onEditButton／openEditorForNew）で共有する。
+     */
+    private LocalDateTime correctedFireAt(String execText, String repeatText) {
+        LocalDateTime base = EditFormLogic.parseExecTime(execText).get(); // 呼び出し側でOK活性＝present前提
+        String rep = repeatText == null ? "" : repeatText.trim();
+        if (rep.isEmpty()) return base;
+
+        RepeatSpec spec;
+        try {
+            spec = RepeatSpec.parse(rep);
+        } catch (RuntimeException e) {
+            return base; // 不正repeatは無補正（OK活性判定と食い違うが、書き戻し前の防御的パースなので安全側へ）
+        }
+        return spec.firstOnOrAfter(base, HolidayCheck.NONE);
+    }
+
+    /**
      * 「編集」ボタンの導線（GUI仕様v2 ③-b/③-d）。選択行のReminderをEditDialogに渡して開き、
      * OKで閉じられた場合のみ入力値をoriginalへ書き戻して保存・再描画する。
      * 未選択（viewRow==-1）ならダイアログは開かず、ステータスバーで案内するだけにする。
@@ -257,7 +278,7 @@ public class MainWindow extends JFrame {
         if (parsed.isEmpty()) return;
 
         // 案A：入力値をoriginalへ上書き。案(あ)：編集したら発火済みフラグを一律リセットする
-        original.fireAt = parsed.get();
+        original.fireAt = correctedFireAt(dialog.getExecTimeText(), dialog.getRepeatText());
         original.repeat = dialog.getRepeatText();
         original.priority = dialog.getSelectedPriority();
         original.message = dialog.getCommentText();
@@ -349,7 +370,7 @@ public class MainWindow extends JFrame {
         var parsed = EditFormLogic.parseExecTime(dialog.getExecTimeText());
         if (parsed.isEmpty()) return false; // OK活性で保証済みだが、書き戻し前に念のため再パース（防御的）
 
-        r.fireAt = parsed.get();
+        r.fireAt = correctedFireAt(dialog.getExecTimeText(), dialog.getRepeatText());
         r.repeat = dialog.getRepeatText();
         r.priority = dialog.getSelectedPriority();
         r.message = dialog.getCommentText();

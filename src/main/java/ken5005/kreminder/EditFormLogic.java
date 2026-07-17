@@ -101,8 +101,15 @@ public final class EditFormLogic {
             return firstLine + "\n" + REP_FORMAT_ERROR;
         }
 
-        StringBuilder sb = new StringBuilder(firstLine);
-        LocalDateTime t = fireAt;
+        // 入力日時が繰り返し条件（曜日限定・第N週限定・月固定日等）に合わない場合、
+        // 起点以降で最初に条件を満たす日時へ黙って補正する（h/m/s単位は無補正）。
+        // ヘッダの残り時間・プレビュー1行目の両方をこの補正後日時に揃える。
+        LocalDateTime first = spec.firstOnOrAfter(fireAt, holiday);
+        String firstRemain = RemainFormat.formatRemaining(Duration.between(now, first));
+        String correctedFirstLine = firstRemain.isEmpty() ? PAST_FIRED_LABEL : firstRemain;
+
+        StringBuilder sb = new StringBuilder(correctedFirstLine);
+        LocalDateTime t = first;
         for (int i = 0; i < PREVIEW_COUNT; i++) {
             sb.append("\n").append(t.format(WITH_SECONDS));
             if (i < PREVIEW_COUNT - 1) {

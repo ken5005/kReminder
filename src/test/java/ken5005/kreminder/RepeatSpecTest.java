@@ -130,6 +130,52 @@ class RepeatSpecTest {
         assertDoesNotThrow(() -> RepeatSpec.parse("rep=1M;day=25;kuriage;ex=0,6"));
     }
 
+    // firstOnOrAfter — 補正が効くケース（曜日限定・第N週限定・月固定日）
+    @Test
+    void firstOnOrAfterCorrectsToFirstMatchingDay() {
+        // rep=1d;in=4（木のみ）: 火曜起点→直後の木曜。時分秒（08:15:30）は据え置き
+        RepeatSpec thursdayOnly = RepeatSpec.parse("rep=1d;in=4");
+        LocalDateTime tuesday = LocalDateTime.of(2026, 6, 2, 8, 15, 30);
+        assertEquals(LocalDateTime.of(2026, 6, 4, 8, 15, 30), thursdayOnly.firstOnOrAfter(tuesday));
+
+        // rep=1d;in=4: 起点自体が木曜なら補正なし（anchorそのまま）
+        LocalDateTime thursday = LocalDateTime.of(2026, 6, 4, 8, 15, 30);
+        assertEquals(thursday, thursdayOnly.firstOnOrAfter(thursday));
+
+        // rep=1d;in=4;dai=1,3（第1第3木）: 第2週の木曜起点→第3週の木曜へ
+        RepeatSpec firstThirdThursday = RepeatSpec.parse("rep=1d;in=4;dai=1,3");
+        LocalDateTime secondWeekThursday = LocalDateTime.of(2026, 6, 11, 8, 0);
+        assertEquals(LocalDateTime.of(2026, 6, 18, 8, 0), firstThirdThursday.firstOnOrAfter(secondWeekThursday));
+
+        // rep=1M;day=25: 当月分がまだなら当月25日へ、過ぎていれば翌月25日へ
+        RepeatSpec day25 = RepeatSpec.parse("rep=1M;day=25");
+        assertEquals(LocalDateTime.of(2026, 6, 25, 8, 0),
+            day25.firstOnOrAfter(LocalDateTime.of(2026, 6, 10, 8, 0)));
+        assertEquals(LocalDateTime.of(2026, 7, 25, 8, 0),
+            day25.firstOnOrAfter(LocalDateTime.of(2026, 6, 28, 8, 0)));
+
+        // rep=1M;day=31: 末日clamp（2月は28日）。28は起点10日以降なので補正先はそのまま2月28日
+        RepeatSpec day31 = RepeatSpec.parse("rep=1M;day=31");
+        assertEquals(LocalDateTime.of(2026, 2, 28, 8, 0),
+            day31.firstOnOrAfter(LocalDateTime.of(2026, 2, 10, 8, 0)));
+    }
+
+    // firstOnOrAfter — 補正が効かないケース（条件なしの間隔系・年次・ゲート対象外のh/m/s）
+    @Test
+    void firstOnOrAfterLeavesAnchorUnchangedWhenNoConditionOrGated() {
+        LocalDateTime anchor = LocalDateTime.of(2026, 6, 2, 8, 15, 30);
+
+        // rep=1d（毎日・曜日条件なし）
+        assertEquals(anchor, RepeatSpec.parse("rep=1d").firstOnOrAfter(anchor));
+        // rep=7d（毎週・曜日条件なし）
+        assertEquals(anchor, RepeatSpec.parse("rep=7d").firstOnOrAfter(anchor));
+        // rep=1y（年次）
+        assertEquals(anchor, RepeatSpec.parse("rep=1y").firstOnOrAfter(anchor));
+        // ゲート: h/m/s は unit が DAY/MONTH/YEAR ではないため無補正
+        assertEquals(anchor, RepeatSpec.parse("rep=30").firstOnOrAfter(anchor));
+        assertEquals(anchor, RepeatSpec.parse("rep=6h").firstOnOrAfter(anchor));
+    }
+
     // #9: nextAfter — 取りこぼしスキップ
     @Test
     void catchUpSkip() {
