@@ -1,6 +1,7 @@
 package ken5005.kreminder.gui;
 
 import ken5005.kreminder.Config;
+import ken5005.kreminder.Const;
 import ken5005.kreminder.CopyName;
 import ken5005.kreminder.EditFormLogic;
 import ken5005.kreminder.ExtName;
@@ -135,6 +136,7 @@ public class MainWindow extends JFrame {
 
         for (String name : new String[]{"新規", "instant", "編集", "複製", "削除", "更新", "デバッグログ"}) {
             var btn = new JButton(name);
+            setFontSize(btn, Const.FONT_SIZE_BUTTON);
             switch (name) {
                 case "デバッグログ" -> btn.addActionListener(e -> toggleDebugPanel());
                 case "編集" -> btn.addActionListener(e -> onEditButton());
@@ -172,6 +174,7 @@ public class MainWindow extends JFrame {
         // チェック変化のたびにフィルタを再適用し、次回起動用に現在状態を保存する
         for (JCheckBox cb : List.of(showEndedCheck, showImminentCheck, showSoonCheck,
                 showFarCheck, showLowPriorityCheck, showAllRepeatCheck)) {
+            setFontSize(cb, Const.FONT_SIZE_FILTER);
             cb.addItemListener(e -> {
                 applyFilter();
                 saveFilterState();
@@ -180,8 +183,11 @@ public class MainWindow extends JFrame {
         }
 
         bar.addSeparator();
-        bar.add(new JLabel("検索"));
+        JLabel searchLabel = new JLabel("検索");
+        setFontSize(searchLabel, Const.FONT_SIZE_FILTER);
+        bar.add(searchLabel);
         searchField = new JTextField(10);
+        setFontSize(searchField, Const.FONT_SIZE_SEARCH);
         // 1文字打つたびに再適用（検索は上書き層＝トグル無視でコメント一致のみ表示に切り替わる）
         searchField.getDocument().addDocumentListener(new DocumentListener() {
             @Override public void insertUpdate(DocumentEvent e) { applyFilter(); }
@@ -485,6 +491,10 @@ public class MainWindow extends JFrame {
         table = new JTable(tableModel);
         // 複数選択は今回対象外（GUI仕様v2 §2.5）。新規/複製/削除は常に単一の対象行に対して働く
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        setFontSize(table, Const.FONT_SIZE_TABLE);
+        setFontSize(table.getTableHeader(), Const.FONT_SIZE_TABLE);
+        // フォント拡大で文字が行内に収まりきらなくなるのを防ぐため、行高をフォント基準で広げる
+        table.setRowHeight(table.getFontMetrics(table.getFont()).getHeight() + 4);
 
         sorter = new TableRowSorter<>(tableModel);
         table.setRowSorter(sorter);
@@ -599,5 +609,10 @@ public class MainWindow extends JFrame {
     /** PanelSink 生成用にデバッグパネルの JTextArea を取り出す。パネル内部構造を過度に公開しない範囲。 */
     public JTextArea getDebugTextArea() {
         return debugPanel.getTextArea();
+    }
+
+    /** フォントサイズだけを差し替える（ファミリ・スタイルはderiveFontで維持）。 */
+    private static void setFontSize(JComponent c, int size) {
+        c.setFont(c.getFont().deriveFont((float) size));
     }
 }
