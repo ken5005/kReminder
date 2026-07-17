@@ -8,7 +8,8 @@ import java.util.Set;
 public final class RepeatSpec {
 
     // ReminderFilter（同パッケージ）から参照するため package-private
-    enum Unit { MONTH, DAY, HOUR, MINUTE, SECOND }
+    // YEARは末尾に追加（既存ordinalをずらさないため。switchは名前参照なので位置自体は無関係だが安全側）
+    enum Unit { MONTH, DAY, HOUR, MINUTE, SECOND, YEAR }
 
     private final String raw;
     private final int repeatVal;
@@ -68,6 +69,9 @@ public final class RepeatSpec {
                     repeatVal = Integer.parseInt(val.substring(0, val.length() - 1));
                 } else if (last == 's') {
                     unit = Unit.SECOND;
+                    repeatVal = Integer.parseInt(val.substring(0, val.length() - 1));
+                } else if (last == 'y') {
+                    unit = Unit.YEAR;
                     repeatVal = Integer.parseInt(val.substring(0, val.length() - 1));
                 } else if (Character.isDigit(last)) {
                     unit = Unit.MINUTE;
@@ -204,6 +208,8 @@ public final class RepeatSpec {
                 return repeatVal == 1 ? "分" : repeatVal + "分";
             case SECOND:
                 return repeatVal == 1 ? "秒" : repeatVal + "秒";
+            case YEAR:
+                return repeatVal == 1 ? "年" : repeatVal + "年";
             default:
                 throw new IllegalStateException("unknown unit: " + unit);
         }
@@ -234,6 +240,7 @@ public final class RepeatSpec {
             case HOUR:   return cal.plusHours(val);
             case MINUTE: return cal.plusMinutes(val);
             case SECOND: return cal.plusSeconds(val);
+            case YEAR:   return cal.plusYears(val);
             default: throw new IllegalStateException("unknown unit: " + unit);
         }
     }

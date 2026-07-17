@@ -28,6 +28,7 @@ class ReminderFilterTest {
             Arguments.of("rep=15d", Duration.ofDays(2)),   // 15日・週次
             Arguments.of("rep=1M", Duration.ofDays(3)),    // 1ヶ月・月次
             Arguments.of("rep=12M", Duration.ofDays(3)),   // 12ヶ月・月次
+            Arguments.of("rep=1y", Duration.ofDays(3)),    // 毎年・月次扱い（例外を投げないことの確認も兼ねる）
 
             // 境界
             Arguments.of("rep=1d", Duration.ofHours(6)),   // 1日ちょうど → <1日ではない側 → 日次
