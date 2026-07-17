@@ -9,13 +9,16 @@ import ken5005.kreminder.sound.SND;
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import javax.swing.text.DefaultEditorKit;
 import java.awt.*;
 import java.awt.event.ActionEvent;
+import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.Set;
 
 /**
  * リマインダー編集ダイアログ（GUI仕様v2 ③-b/③-c）。
@@ -34,7 +37,7 @@ public class EditDialog extends JDialog {
     private final ExecTimeInput execTimeField;
     private final JTextField repeatField = new JTextField(20);
     private final JComboBox<Reminder.Priority> priorityCombo = new JComboBox<>(Reminder.Priority.values());
-    private final JTextField commentField = new JTextField(20);
+    private final JTextArea commentArea = new JTextArea(3, 20);
     private final JTextField cmdField = new JTextField(20);
     private final JTextArea previewArea = new JTextArea(6, 20);
     private final JButton okButton = new JButton("OK");
@@ -66,14 +69,35 @@ public class EditDialog extends JDialog {
         execTimeField.setDateTime(original.fireAt);
         repeatField.setText(original.repeat == null ? "" : original.repeat);
         priorityCombo.setSelectedItem(original.priority);
-        commentField.setText(original.message == null ? "" : original.message);
+        commentArea.setText(original.message == null ? "" : original.message);
         cmdField.setText(original.action == null ? "" : original.action);
 
         // 入力欄フォント拡大（execTimeFieldの内部数字欄はConst.FONT_SIZE_DATETIME_FIELD側で制御済み・ここでは触らない）
         setFontSize(repeatField, Const.FONT_SIZE_EDIT_FIELD);
-        setFontSize(commentField, Const.FONT_SIZE_EDIT_FIELD);
+        setFontSize(commentArea, Const.FONT_SIZE_EDIT_FIELD);
         setFontSize(cmdField, Const.FONT_SIZE_EDIT_FIELD);
         setFontSize(priorityCombo, Const.FONT_SIZE_EDIT_FIELD);
+
+        // 折り返し表示（長文コメントを横スクロールでなく複数行で見せる）
+        commentArea.setLineWrap(true);
+        commentArea.setWrapStyleWord(true);
+
+        // JTextAreaは既定でEnterを改行として消費し、rootPaneのokOrGonまで届かない。
+        // WHEN_FOCUSEDで握り直し、Enter=登録・Shift+Enter=改行にする（A案）
+        commentArea.getInputMap(JComponent.WHEN_FOCUSED)
+            .put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "kreminder.submit");
+        commentArea.getActionMap().put("kreminder.submit", new AbstractAction() {
+            @Override public void actionPerformed(ActionEvent e) { onEnterPressed(); }
+        });
+        commentArea.getInputMap(JComponent.WHEN_FOCUSED)
+            .put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, InputEvent.SHIFT_DOWN_MASK),
+                 DefaultEditorKit.insertBreakAction);
+
+        // Tabはタブ文字を入れず、他の欄と同じくフォーカス移動として扱う
+        commentArea.setFocusTraversalKeys(KeyboardFocusManager.FORWARD_TRAVERSAL_KEYS,
+            Set.of(KeyStroke.getKeyStroke(KeyEvent.VK_TAB, 0)));
+        commentArea.setFocusTraversalKeys(KeyboardFocusManager.BACKWARD_TRAVERSAL_KEYS,
+            Set.of(KeyStroke.getKeyStroke(KeyEvent.VK_TAB, InputEvent.SHIFT_DOWN_MASK)));
 
         previewArea.setEditable(false);
         // 横スクロールを出さず、長い行（Usageヘルプ等）は折り返し表示にする
@@ -173,10 +197,17 @@ public class EditDialog extends JDialog {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(4, 4, 4, 4);
 
+        var commentScroll = new JScrollPane(commentArea,
+            JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+            JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        // GridBagLayoutはJScrollPaneの既定最小サイズ（極小）まで潰しうるため、3行ぶんの高さを下限に固定する。
+        // 幅は0のままにしてfill=HORIZONTALでの横方向の伸縮を妨げない
+        commentScroll.setMinimumSize(new Dimension(0, commentScroll.getPreferredSize().height));
+
         addRow(panel, gbc, 0, "実行時刻", execTimeField.getComponent());
-        addRow(panel, gbc, 1, "繰り返し", repeatField);
+        addRow(panel, gbc, 1, "コメント", commentScroll, GridBagConstraints.NORTHWEST);
         addRow(panel, gbc, 2, "優先度", priorityCombo);
-        addRow(panel, gbc, 3, "コメント", commentField);
+        addRow(panel, gbc, 3, "繰り返し", repeatField);
         addRow(panel, gbc, 4, "Cmd", cmdField);
 
         gbc.gridx = 0;
@@ -185,23 +216,33 @@ public class EditDialog extends JDialog {
         var previewScroll = new JScrollPane(previewArea,
             JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
             JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        // 同様に6行ぶんの高さを下限に固定する
+        previewScroll.setMinimumSize(new Dimension(0, previewScroll.getPreferredSize().height));
         panel.add(previewScroll, gbc);
 
         return panel;
     }
 
-    // ラベル1列＋入力欄1列の1行分をGridBagLayoutに追加する
+    // ラベル1列＋入力欄1列の1行分をGridBagLayoutに追加する（ラベルは既定でCENTER縦位置）
     private void addRow(JPanel panel, GridBagConstraints gbc, int row, String label, JComponent field) {
+        addRow(panel, gbc, row, label, field, GridBagConstraints.CENTER);
+    }
+
+    // labelAnchor違いのオーバーロード。コメント行のように背の高い入力欄でラベルを上寄せにしたい場合に使う。
+    // gbcはメソッド間で使い回すため、次の行に影響しないよう最後に既定のCENTERへ戻す
+    private void addRow(JPanel panel, GridBagConstraints gbc, int row, String label, JComponent field, int labelAnchor) {
         gbc.gridy = row;
         gbc.gridx = 0;
         gbc.gridwidth = 1;
         gbc.weightx = 0;
+        gbc.anchor = labelAnchor;
         JLabel labelComponent = new JLabel(label);
         setFontSize(labelComponent, Const.FONT_SIZE_EDIT_LABEL);
         panel.add(labelComponent, gbc);
         gbc.gridx = 1;
         gbc.weightx = 1;
         panel.add(field, gbc);
+        gbc.anchor = GridBagConstraints.CENTER;
     }
 
     private JPanel buildButtons() {
@@ -236,7 +277,7 @@ public class EditDialog extends JDialog {
         var fireAt = EditFormLogic.parseExecTime(execTimeField.getExecTimeText());
         if (fireAt.isPresent()
                 && EditFormLogic.needsEmptyCommentWarning(
-                    commentField.getText(), fireAt.get(), getSelectedPriority(), cmdField.getText(), repeatField.getText(),
+                    commentArea.getText(), fireAt.get(), getSelectedPriority(), cmdField.getText(), repeatField.getText(),
                     LocalDateTime.now(clock))) {
             int result = JOptionPane.showConfirmDialog(
                 this, "<<注意：コメントが空です>>", "確認", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
@@ -266,7 +307,7 @@ public class EditDialog extends JDialog {
     }
 
     public String getCommentText() {
-        return commentField.getText();
+        return commentArea.getText();
     }
 
     public String getCmdText() {
