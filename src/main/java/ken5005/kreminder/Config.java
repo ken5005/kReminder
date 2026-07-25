@@ -26,6 +26,24 @@ public class Config {
     private static final String KEY_WAV_DIR = "snd.wav.dir";
     private static final String DEFAULT_WAV_DIR = "C:\\tools2\\etc\\wav";
 
+    // ウィンドウ状態の永続化（フェーズ4「き」）。位置・分割位置・ダイアログサイズは
+    // 「未設定」を表す UNSET(-1) を既定にし、未設定なら復元せず従来どおりの見た目を使う
+    private static final String KEY_MAIN_X = "window.main.x";
+    private static final String KEY_MAIN_Y = "window.main.y";
+    private static final String KEY_MAIN_WIDTH = "window.main.width";
+    private static final String KEY_MAIN_HEIGHT = "window.main.height";
+    private static final String KEY_MAIN_DIVIDER = "window.main.divider";
+    private static final String KEY_TABLE_COLUMN_WIDTHS = "table.columnWidths";
+    private static final String KEY_EDIT_WIDTH = "window.edit.width";
+    private static final String KEY_EDIT_HEIGHT = "window.edit.height";
+    private static final String KEY_INSTANT_WIDTH = "window.instant.width";
+    private static final String KEY_INSTANT_HEIGHT = "window.instant.height";
+    private static final String KEY_DEBUG_ENABLED = "debug.enabled";
+
+    private static final int UNSET = -1;
+    private static final int DEFAULT_MAIN_WIDTH = 800;
+    private static final int DEFAULT_MAIN_HEIGHT = 500;
+
     private final Path configPath;
 
     private boolean showEnded = false;
@@ -35,6 +53,18 @@ public class Config {
     private boolean showLowPriority = true;
     private boolean showAllRepeat = false;
     private String wavDir = DEFAULT_WAV_DIR;
+
+    private int mainX = UNSET;
+    private int mainY = UNSET;
+    private int mainWidth = DEFAULT_MAIN_WIDTH;
+    private int mainHeight = DEFAULT_MAIN_HEIGHT;
+    private int mainDivider = UNSET;
+    private String tableColumnWidths = "";
+    private int editWidth = UNSET;
+    private int editHeight = UNSET;
+    private int instantWidth = UNSET;
+    private int instantHeight = UNSET;
+    private boolean debugEnabled = false;
 
     public Config() {
         this(buildConfigPath());
@@ -94,6 +124,18 @@ public class Config {
         } else {
             wavDir = props.getProperty(KEY_WAV_DIR);
         }
+
+        mainX = parseInt(props, KEY_MAIN_X, mainX);
+        mainY = parseInt(props, KEY_MAIN_Y, mainY);
+        mainWidth = parseInt(props, KEY_MAIN_WIDTH, mainWidth);
+        mainHeight = parseInt(props, KEY_MAIN_HEIGHT, mainHeight);
+        mainDivider = parseInt(props, KEY_MAIN_DIVIDER, mainDivider);
+        tableColumnWidths = props.getProperty(KEY_TABLE_COLUMN_WIDTHS, tableColumnWidths);
+        editWidth = parseInt(props, KEY_EDIT_WIDTH, editWidth);
+        editHeight = parseInt(props, KEY_EDIT_HEIGHT, editHeight);
+        instantWidth = parseInt(props, KEY_INSTANT_WIDTH, instantWidth);
+        instantHeight = parseInt(props, KEY_INSTANT_HEIGHT, instantHeight);
+        debugEnabled = parseBool(props, KEY_DEBUG_ENABLED, debugEnabled);
     }
 
     public void save() {
@@ -105,6 +147,18 @@ public class Config {
         props.setProperty(KEY_SHOW_LOW_PRIORITY, Boolean.toString(showLowPriority));
         props.setProperty(KEY_SHOW_ALL_REPEAT, Boolean.toString(showAllRepeat));
         props.setProperty(KEY_WAV_DIR, wavDir);
+
+        props.setProperty(KEY_MAIN_X, Integer.toString(mainX));
+        props.setProperty(KEY_MAIN_Y, Integer.toString(mainY));
+        props.setProperty(KEY_MAIN_WIDTH, Integer.toString(mainWidth));
+        props.setProperty(KEY_MAIN_HEIGHT, Integer.toString(mainHeight));
+        props.setProperty(KEY_MAIN_DIVIDER, Integer.toString(mainDivider));
+        props.setProperty(KEY_TABLE_COLUMN_WIDTHS, tableColumnWidths);
+        props.setProperty(KEY_EDIT_WIDTH, Integer.toString(editWidth));
+        props.setProperty(KEY_EDIT_HEIGHT, Integer.toString(editHeight));
+        props.setProperty(KEY_INSTANT_WIDTH, Integer.toString(instantWidth));
+        props.setProperty(KEY_INSTANT_HEIGHT, Integer.toString(instantHeight));
+        props.setProperty(KEY_DEBUG_ENABLED, Boolean.toString(debugEnabled));
 
         try {
             Files.createDirectories(configPath.getParent());
@@ -121,6 +175,17 @@ public class Config {
     private static boolean parseBool(Properties props, String key, boolean defaultValue) {
         String value = props.getProperty(key);
         return value == null ? defaultValue : Boolean.parseBoolean(value);
+    }
+
+    // キー欠け・数値でない壊れた値の両方でデフォルト維持（Integer.parseIntは例外を投げるためcatchする）
+    private static int parseInt(Properties props, String key, int defaultValue) {
+        String value = props.getProperty(key);
+        if (value == null) return defaultValue;
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
     }
 
     public boolean isShowEnded() { return showEnded; }
@@ -142,4 +207,37 @@ public class Config {
     public void setShowAllRepeat(boolean showAllRepeat) { this.showAllRepeat = showAllRepeat; }
 
     public Path getWavDir() { return Path.of(wavDir); }
+
+    public int getMainX() { return mainX; }
+    public void setMainX(int mainX) { this.mainX = mainX; }
+
+    public int getMainY() { return mainY; }
+    public void setMainY(int mainY) { this.mainY = mainY; }
+
+    public int getMainWidth() { return mainWidth; }
+    public void setMainWidth(int mainWidth) { this.mainWidth = mainWidth; }
+
+    public int getMainHeight() { return mainHeight; }
+    public void setMainHeight(int mainHeight) { this.mainHeight = mainHeight; }
+
+    public int getMainDivider() { return mainDivider; }
+    public void setMainDivider(int mainDivider) { this.mainDivider = mainDivider; }
+
+    public String getTableColumnWidths() { return tableColumnWidths; }
+    public void setTableColumnWidths(String tableColumnWidths) { this.tableColumnWidths = tableColumnWidths; }
+
+    public int getEditWidth() { return editWidth; }
+    public void setEditWidth(int editWidth) { this.editWidth = editWidth; }
+
+    public int getEditHeight() { return editHeight; }
+    public void setEditHeight(int editHeight) { this.editHeight = editHeight; }
+
+    public int getInstantWidth() { return instantWidth; }
+    public void setInstantWidth(int instantWidth) { this.instantWidth = instantWidth; }
+
+    public int getInstantHeight() { return instantHeight; }
+    public void setInstantHeight(int instantHeight) { this.instantHeight = instantHeight; }
+
+    // 読み込むだけで当面どこからも使わない値（Main.shutdownApp等）ため setter は用意しない
+    public boolean isDebugEnabled() { return debugEnabled; }
 }
