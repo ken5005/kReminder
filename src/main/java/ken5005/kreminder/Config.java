@@ -32,7 +32,8 @@ public class Config {
     private static final String KEY_MAIN_Y = "window.main.y";
     private static final String KEY_MAIN_WIDTH = "window.main.width";
     private static final String KEY_MAIN_HEIGHT = "window.main.height";
-    private static final String KEY_MAIN_DIVIDER = "window.main.divider";
+    // 分割位置は絶対pxではなく比率(0.0〜1.0)で持つ。窓高さが変わっても破綻しないようにするため
+    private static final String KEY_MAIN_DIVIDER_RATIO = "window.main.dividerRatio";
     private static final String KEY_TABLE_COLUMN_WIDTHS = "table.columnWidths";
     private static final String KEY_EDIT_WIDTH = "window.edit.width";
     private static final String KEY_EDIT_HEIGHT = "window.edit.height";
@@ -40,7 +41,8 @@ public class Config {
     private static final String KEY_INSTANT_HEIGHT = "window.instant.height";
     private static final String KEY_DEBUG_ENABLED = "debug.enabled";
 
-    private static final int UNSET = -1;
+    // MainWindowが「一度も保存されていない」を判定する際に同じ値を参照できるようpublicにする
+    public static final int UNSET = -1;
     private static final int DEFAULT_MAIN_WIDTH = 800;
     private static final int DEFAULT_MAIN_HEIGHT = 500;
 
@@ -58,7 +60,10 @@ public class Config {
     private int mainY = UNSET;
     private int mainWidth = DEFAULT_MAIN_WIDTH;
     private int mainHeight = DEFAULT_MAIN_HEIGHT;
-    private int mainDivider = UNSET;
+    // 未設定はUNSETをそのままdoubleへ広げた-1.0。0.0〜1.0の範囲外なので、範囲チェックする側
+    // （MainWindow。DEFAULT_DEBUG_DIVIDER_RATIOというGUI固有の既定値を知っているのはそちら）が
+    // 「無効値」として自然に検出できる。ここでは壊れた文字列を数値に戻せるかだけを見る
+    private double mainDividerRatio = UNSET;
     private String tableColumnWidths = "";
     private int editWidth = UNSET;
     private int editHeight = UNSET;
@@ -129,7 +134,7 @@ public class Config {
         mainY = parseInt(props, KEY_MAIN_Y, mainY);
         mainWidth = parseInt(props, KEY_MAIN_WIDTH, mainWidth);
         mainHeight = parseInt(props, KEY_MAIN_HEIGHT, mainHeight);
-        mainDivider = parseInt(props, KEY_MAIN_DIVIDER, mainDivider);
+        mainDividerRatio = parseDouble(props, KEY_MAIN_DIVIDER_RATIO, mainDividerRatio);
         tableColumnWidths = props.getProperty(KEY_TABLE_COLUMN_WIDTHS, tableColumnWidths);
         editWidth = parseInt(props, KEY_EDIT_WIDTH, editWidth);
         editHeight = parseInt(props, KEY_EDIT_HEIGHT, editHeight);
@@ -152,7 +157,7 @@ public class Config {
         props.setProperty(KEY_MAIN_Y, Integer.toString(mainY));
         props.setProperty(KEY_MAIN_WIDTH, Integer.toString(mainWidth));
         props.setProperty(KEY_MAIN_HEIGHT, Integer.toString(mainHeight));
-        props.setProperty(KEY_MAIN_DIVIDER, Integer.toString(mainDivider));
+        props.setProperty(KEY_MAIN_DIVIDER_RATIO, Double.toString(mainDividerRatio));
         props.setProperty(KEY_TABLE_COLUMN_WIDTHS, tableColumnWidths);
         props.setProperty(KEY_EDIT_WIDTH, Integer.toString(editWidth));
         props.setProperty(KEY_EDIT_HEIGHT, Integer.toString(editHeight));
@@ -177,12 +182,23 @@ public class Config {
         return value == null ? defaultValue : Boolean.parseBoolean(value);
     }
 
-    // キー欠け・数値でない壊れた値の両方でデフォルト維持（Integer.parseIntは例外を投げるためcatchする）
+    // キー欠け・数値でない壊れた値の両方でデフォルト維持(Integer.parseIntは例外を投げるためcatchする)
     private static int parseInt(Properties props, String key, int defaultValue) {
         String value = props.getProperty(key);
         if (value == null) return defaultValue;
         try {
             return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
+    }
+
+    // parseIntのdouble版。範囲(0.0〜1.0等)の妥当性はここでは見ない＝数値として読めるかどうかだけ
+    private static double parseDouble(Properties props, String key, double defaultValue) {
+        String value = props.getProperty(key);
+        if (value == null) return defaultValue;
+        try {
+            return Double.parseDouble(value);
         } catch (NumberFormatException e) {
             return defaultValue;
         }
@@ -220,8 +236,8 @@ public class Config {
     public int getMainHeight() { return mainHeight; }
     public void setMainHeight(int mainHeight) { this.mainHeight = mainHeight; }
 
-    public int getMainDivider() { return mainDivider; }
-    public void setMainDivider(int mainDivider) { this.mainDivider = mainDivider; }
+    public double getMainDividerRatio() { return mainDividerRatio; }
+    public void setMainDividerRatio(double mainDividerRatio) { this.mainDividerRatio = mainDividerRatio; }
 
     public String getTableColumnWidths() { return tableColumnWidths; }
     public void setTableColumnWidths(String tableColumnWidths) { this.tableColumnWidths = tableColumnWidths; }

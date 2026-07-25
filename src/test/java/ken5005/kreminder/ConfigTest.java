@@ -95,7 +95,7 @@ class ConfigTest {
         written.setMainY(80);
         written.setMainWidth(1000);
         written.setMainHeight(700);
-        written.setMainDivider(333);
+        written.setMainDividerRatio(0.6);
         written.setTableColumnWidths("40,120,80,100,300");
         written.setEditWidth(500);
         written.setEditHeight(400);
@@ -110,7 +110,7 @@ class ConfigTest {
         assertEquals(80, read.getMainY());
         assertEquals(1000, read.getMainWidth());
         assertEquals(700, read.getMainHeight());
-        assertEquals(333, read.getMainDivider());
+        assertEquals(0.6, read.getMainDividerRatio());
         assertEquals("40,120,80,100,300", read.getTableColumnWidths());
         assertEquals(500, read.getEditWidth());
         assertEquals(400, read.getEditHeight());
@@ -131,7 +131,7 @@ class ConfigTest {
         assertEquals(-1, config.getMainY());
         assertEquals(800, config.getMainWidth());
         assertEquals(500, config.getMainHeight());
-        assertEquals(-1, config.getMainDivider());
+        assertEquals(-1.0, config.getMainDividerRatio());
         assertEquals("", config.getTableColumnWidths());
         assertEquals(-1, config.getEditWidth());
         assertEquals(-1, config.getEditHeight());
@@ -148,7 +148,7 @@ class ConfigTest {
             "window.main.y=",
             "window.main.width=notanumber",
             "window.main.height=1.5",
-            "window.main.divider=abc",
+            "window.main.dividerRatio=abc",
             "window.edit.width=abc",
             "window.edit.height=abc",
             "window.instant.width=abc",
@@ -163,12 +163,25 @@ class ConfigTest {
         assertEquals(-1, config.getMainY());
         assertEquals(800, config.getMainWidth());
         assertEquals(500, config.getMainHeight());
-        assertEquals(-1, config.getMainDivider());
+        assertEquals(-1.0, config.getMainDividerRatio());
         assertEquals(-1, config.getEditWidth());
         assertEquals(-1, config.getEditHeight());
         assertEquals(-1, config.getInstantWidth());
         assertEquals(-1, config.getInstantHeight());
         // debug.enabled=abc は Boolean.parseBoolean で例外にならず単に false 扱いになる（デフォルトと同じ）
         assertFalse(config.isDebugEnabled());
+    }
+
+    @Test
+    void mainDividerRatioOutOfRangeIsNotRejectedByConfig(@TempDir Path tmp) throws IOException {
+        // 範囲(0.0〜1.0)の妥当性はConfigの責務ではなくMainWindow側で見る設計（DEFAULT_DEBUG_DIVIDER_RATIOという
+        // GUI固有の既定値を知っているのがMainWindowのため）。Configは数値として読めればそのまま返してよい
+        Path configPath = tmp.resolve("outofrange.properties");
+        Files.writeString(configPath, "window.main.dividerRatio=5.0\n", StandardCharsets.UTF_8);
+
+        Config config = new Config(configPath);
+        config.load();
+
+        assertEquals(5.0, config.getMainDividerRatio());
     }
 }
