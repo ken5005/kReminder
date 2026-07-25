@@ -238,6 +238,6 @@ public class Config {
     public int getInstantHeight() { return instantHeight; }
     public void setInstantHeight(int instantHeight) { this.instantHeight = instantHeight; }
 
-    // 読み込むだけで当面どこからも使わない値（Main.shutdownApp等）ため setter は用意しない
+    // 読むだけで書き換えないので setter は用意しない
     public boolean isDebugEnabled() { return debugEnabled; }
 }

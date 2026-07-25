@@ -23,11 +23,19 @@ public final class WindowBoundsLogic {
     /**
      * 保存されていた矩形(x,y,width,height)が monitors のいずれかと重なるか調べて安全化する。
      * どれとも重ならない（画面外に消えている）場合は中央寄せ指示（centered=true）を返す。
-     * 重なる場合は、その画面の表示領域を基準に幅・高さを最小値〜画面サイズの範囲へクランプする。
+     * 重なる場合は、その画面の表示領域を基準に幅・高さを最小値〜画面サイズの範囲へクランプし、
+     * さらに y がその画面の上端より上にはみ出していれば上端まで持ち上げる（タイトルバーが
+     * 画面上端より上に出てマウスで掴めなくなる事故を防ぐ。x方向はクランプ/救済の対象外）。
      */
     public static Resolved resolve(int x, int y, int width, int height, List<MonitorBounds> monitors) {
         MonitorBounds overlapping = findOverlapping(x, y, width, height, monitors);
         if (overlapping == null) {
+            if (monitors.isEmpty()) {
+                // 上限の根拠になるモニタが無いため、最小値と保存値の大きい方をそのまま使う
+                int w = Math.max(MIN_WIDTH, width);
+                int h = Math.max(MIN_HEIGHT, height);
+                return new Resolved(true, 0, 0, w, h);
+            }
             // 中央寄せに任せるが、サイズだけは先頭（プライマリ）モニタ基準で正しておく
             MonitorBounds primary = monitors.get(0);
             int w = clamp(width, MIN_WIDTH, primary.width());
@@ -36,7 +44,9 @@ public final class WindowBoundsLogic {
         }
         int w = clamp(width, MIN_WIDTH, overlapping.width());
         int h = clamp(height, MIN_HEIGHT, overlapping.height());
-        return new Resolved(false, x, y, w, h);
+        // 比較対象は0ではなくそのモニタの上端(m.y())。上に並んだモニタはy自体が負になりうるため
+        int adjustedY = y < overlapping.y() ? overlapping.y() : y;
+        return new Resolved(false, x, adjustedY, w, h);
     }
 
     private static MonitorBounds findOverlapping(int x, int y, int width, int height, List<MonitorBounds> monitors) {
