@@ -700,6 +700,9 @@ public class Main {
         if (shutdownDone) return;
         shutdownDone = true;
 
+        // window はMainWindow生成前（例: 起動直後のロック競合中止）に終了する経路がありうるためnullチェック必須
+        if (window != null) window.saveWindowState();
+
         if (trayIcon != null) {
             SystemTray.getSystemTray().remove(trayIcon);
         }
