@@ -1,5 +1,6 @@
 package ken5005.kreminder.gui;
 
+import ken5005.kreminder.ColumnWidthsCodec;
 import ken5005.kreminder.Config;
 import ken5005.kreminder.Const;
 import ken5005.kreminder.CopyName;
@@ -7,10 +8,12 @@ import ken5005.kreminder.EditFormLogic;
 import ken5005.kreminder.ExtName;
 import ken5005.kreminder.FilterState;
 import ken5005.kreminder.HolidayCheck;
+import ken5005.kreminder.MonitorBounds;
 import ken5005.kreminder.Reminder;
 import ken5005.kreminder.ReminderFilter;
 import ken5005.kreminder.ReminderStore;
 import ken5005.kreminder.RepeatSpec;
+import ken5005.kreminder.WindowBoundsLogic;
 import ken5005.kreminder.debug.DEB;
 
 import javax.swing.*;
@@ -26,6 +29,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
@@ -67,7 +71,9 @@ public class MainWindow extends JFrame {
     private JTextField searchField;
 
     private boolean debugPanelOpen = false;
-    private int savedDividerLocation = -1; // 未設定＝初回はDEFAULT_DEBUG_DIVIDER_RATIOを使う
+    // 展開時の分割位置を絶対pxではなく比率(0.0〜1.0)で保持する（窓高さが変わっても破綻しないため）。
+    // 範囲外・未設定の値はConfig読込時にこの既定値へフォールバックする
+    private double savedDividerRatio = DEFAULT_DEBUG_DIVIDER_RATIO;
     private boolean initialCollapseApplied = false;
 
     public MainWindow(Clock clock, List<Reminder> reminders, ReminderStore store) {
@@ -75,9 +81,21 @@ public class MainWindow extends JFrame {
         this.clock = clock;
         this.reminders = reminders;
         this.store = store;
-        setSize(800, 500);
-        // 画面中央に配置（null = 自画面基準）
-        setLocationRelativeTo(null);
+
+        // ウィンドウ位置・サイズやフィルタUIの初期値（buildFilterBar()で使う）に必要なため、
+        // UIを組み立てるより前に読み込む（従来はsetSizeの後ろにあり、この用途には遅すぎた）
+        config.load();
+
+        applyWindowBounds();
+
+        // 展開したときに前回比率へ戻すための値。範囲外(0.0〜1.0外・UNSETの-1.0含む)ならフィールド既定の
+        // DEFAULT_DEBUG_DIVIDER_RATIOのまま（config.propertiesに残る旧形式の絶対px値もこれで自動的に無効化される）。
+        // 起動直後にDEBパネルが畳まれている見た目は変えない
+        double loadedRatio = config.getMainDividerRatio();
+        if (loadedRatio >= 0.0 && loadedRatio <= 1.0) {
+            savedDividerRatio = loadedRatio;
+        }
+
         // ×ボタンで JVM ごと終了（常駐トレイ版とは切り離した学習用 main 前提）
         setDefaultCloseOperation(EXIT_ON_CLOSE);
 
@@ -91,12 +109,12 @@ public class MainWindow extends JFrame {
             DEB.pr("タスクバーアイコンの読み込みに失敗しました: /icons/Calendar.png が見つかりません");
         }
 
-        // buildFilterBar() でチェックボックス初期値に使うため、UIを組む前に読み込む
-        config.load();
-
         getContentPane().add(buildTopBars(),   BorderLayout.NORTH);
         getContentPane().add(buildSplitPane(), BorderLayout.CENTER);
         getContentPane().add(statusBar,       BorderLayout.SOUTH);
+
+        // buildSplitPane()内のbuildTable()でtableが組まれた直後＝列がすべて揃ってから列幅を反映する
+        applyColumnWidths();
 
         // フィルタUI（buildTopBars）とテーブル/sorter（buildSplitPane）の両方が揃ってから
         // 初期フィルタを適用する。これをしないと起動直後は無フィルタ（全件表示）になってしまう。
@@ -104,6 +122,56 @@ public class MainWindow extends JFrame {
 
         // Ctrl+N/Ctrl+D は窓スコープ（GUI仕様v2 §2.5.6）。EditDialog等の別窓にフォーカスがある間は発火しない
         setupWindowKeyBindings();
+    }
+
+    /**
+     * 保存されていた位置・サイズを、今のモニタ構成に照らして安全化してから適用する（フェーズ4「き」）。
+     * 位置が一度も保存されていない(UNSET)場合はサイズだけConfigの既定値を使い、位置は
+     * 従来どおり画面中央に出す。保存済みの場合はWindowBoundsLogicへ値を渡して安全化する
+     * （AWTのGraphicsEnvironmentへ問い合わせるのはここ＝MainWindowの責務。純関数側は値だけを見る）。
+     */
+    private void applyWindowBounds() {
+        int savedWidth = config.getMainWidth();
+        int savedHeight = config.getMainHeight();
+
+        if (config.getMainX() == Config.UNSET || config.getMainY() == Config.UNSET) {
+            setSize(savedWidth, savedHeight);
+            setLocationRelativeTo(null); // 画面中央に配置（null = 自画面基準）
+            return;
+        }
+
+        WindowBoundsLogic.Resolved resolved = WindowBoundsLogic.resolve(
+            config.getMainX(), config.getMainY(), savedWidth, savedHeight, currentMonitorBounds());
+
+        setSize(resolved.width(), resolved.height());
+        if (resolved.centered()) {
+            setLocationRelativeTo(null); // モニタ構成が変わり画面外に消えていた等＝中央へ置き直す
+        } else {
+            setLocation(resolved.x(), resolved.y());
+        }
+    }
+
+    /** 現在のモニタ構成をAWTから取得し、WindowBoundsLogicが読める値だけの形に詰め替える。 */
+    private static List<MonitorBounds> currentMonitorBounds() {
+        List<MonitorBounds> monitors = new ArrayList<>();
+        for (GraphicsDevice device : GraphicsEnvironment.getLocalGraphicsEnvironment().getScreenDevices()) {
+            Rectangle b = device.getDefaultConfiguration().getBounds();
+            monitors.add(new MonitorBounds(b.x, b.y, b.width, b.height));
+        }
+        return monitors;
+    }
+
+    /**
+     * 保存されていた列幅をテーブルの各列へ反映する。保存値の個数が今の列数と食い違う場合
+     * （保存後に列構成が変わった等）は、一致する分だけ反映して残りは無視する（起動は止めない）。
+     */
+    private void applyColumnWidths() {
+        int[] widths = ColumnWidthsCodec.parse(config.getTableColumnWidths());
+        var columnModel = table.getColumnModel();
+        int count = Math.min(widths.length, columnModel.getColumnCount());
+        for (int i = 0; i < count; i++) {
+            columnModel.getColumn(i).setPreferredWidth(widths[i]);
+        }
     }
 
     /**
@@ -229,16 +297,17 @@ public class MainWindow extends JFrame {
         }
     }
 
-    /** デバッグパネルの開閉を切り替える。開く時は直前位置（無ければ既定比率）に復元する。 */
+    /** デバッグパネルの開閉を切り替える。開く時は直前の比率（無ければ既定比率）に復元する。 */
     private void toggleDebugPanel() {
         if (debugPanelOpen) {
-            savedDividerLocation = splitPane.getDividerLocation();
+            int height = splitPane.getHeight();
+            // 高さ0での0除算を避ける（万一起きても既定比率へ倒すだけで済む安全側の値）
+            savedDividerRatio = height > 0
+                    ? (double) splitPane.getDividerLocation() / height
+                    : DEFAULT_DEBUG_DIVIDER_RATIO;
             splitPane.setDividerLocation(1.0); // 下段高さ0＝collapsed
         } else {
-            int location = savedDividerLocation >= 0
-                    ? savedDividerLocation
-                    : (int) (splitPane.getHeight() * DEFAULT_DEBUG_DIVIDER_RATIO);
-            splitPane.setDividerLocation(location);
+            splitPane.setDividerLocation((int) (splitPane.getHeight() * savedDividerRatio));
         }
         debugPanelOpen = !debugPanelOpen;
     }
@@ -284,8 +353,7 @@ public class MainWindow extends JFrame {
         Reminder original = tableModel.getReminderAt(modelRow);
 
         var dialog = new EditDialog(this, original, clock);
-        dialog.setLocationRelativeTo(this);
-        dialog.setVisible(true); // モーダルなのでダイアログが閉じるまでここで待つ（この間にoriginalが消えうる）
+        showEditDialog(dialog, EditDialog.Mode.NORMAL, false); // モーダルなのでこの中で閉じるまで待つ（この間にoriginalが消えうる）
 
         if (!dialog.isOkPressed()) return; // キャンセル・Esc・×は何もしない（消えていてもそのまま＝仕様どおり）
 
@@ -377,9 +445,7 @@ public class MainWindow extends JFrame {
      */
     private boolean openEditorForNew(Reminder r, EditDialog.Mode mode, boolean alwaysOnTop) {
         var dialog = new EditDialog(this, r, clock, mode);
-        dialog.setLocationRelativeTo(this);
-        if (alwaysOnTop) dialog.setAlwaysOnTop(true);
-        dialog.setVisible(true);
+        showEditDialog(dialog, mode, alwaysOnTop);
 
         if (!dialog.isOkPressed()) return false; // キャンセル・Esc・×は追加しない
 
@@ -397,6 +463,51 @@ public class MainWindow extends JFrame {
         store.save(reminders);
         revealAddedRow(modelRow);
         return true;
+    }
+
+    /**
+     * EditDialogを開いて閉じるまでの共通処理（フェーズ4「き」step3）。onEditButton／
+     * openEditorForNewの2箇所が同じことをしていたためここへ集約した。
+     * dialogは呼び出し側で生成済み（コンストラクタ内でpack()済み＝この時点のサイズがpacked）。
+     * サイズの復元→位置設定→表示→サイズの保存、という順で行う。閉じた後の isOkPressed() 判定等は
+     * 呼び出し元がdialogを使って続ける。
+     */
+    private void showEditDialog(EditDialog dialog, EditDialog.Mode mode, boolean alwaysOnTop) {
+        int packedWidth = dialog.getWidth();
+        int packedHeight = dialog.getHeight();
+
+        boolean normal = mode == EditDialog.Mode.NORMAL;
+        int savedWidth = normal ? config.getEditWidth() : config.getInstantWidth();
+        int savedHeight = normal ? config.getEditHeight() : config.getInstantHeight();
+
+        WindowBoundsLogic.DialogSize size = WindowBoundsLogic.resolveDialogSize(
+            savedWidth, savedHeight, packedWidth, packedHeight, currentMonitorBounds());
+        dialog.setSize(size.width(), size.height());
+
+        // setLocationRelativeTo(null)は必ずsetSizeの後に呼ぶ：先に呼ぶと変更前のサイズを基準に
+        // 中央位置が計算され実際にはずれてしまう。nullを渡すのは親(this)ではなく画面中央に出すため
+        dialog.setLocationRelativeTo(null);
+
+        if (alwaysOnTop) dialog.setAlwaysOnTop(true);
+
+        dialog.setVisible(true); // モーダルなのでダイアログが閉じるまでここで待つ
+
+        // ここから先はダイアログが閉じた後。最終サイズをその場でConfigへ保存する。
+        // saveWindowState()（終了時）に相乗りしないのは、そちらがメインウィンドウ最大化中は
+        // 早期returnするため＝メインウィンドウを最大化したまま終了するとダイアログサイズだけ
+        // 永久に保存されなくなってしまう。ダイアログのサイズはメインウィンドウの最大化状態とは
+        // 無関係なので、そのガードの外側でここで保存する。
+        // 副作用：ここでのconfig.save()はwindow.main.*を「起動時に読んだ値」のまま書き出すが
+        // （ウィンドウを動かしてもその時点ではConfigに未反映のため）、終了時のsaveWindowState()が
+        // 正しい値で上書きするので最終結果には影響しない。
+        if (normal) {
+            config.setEditWidth(dialog.getWidth());
+            config.setEditHeight(dialog.getHeight());
+        } else {
+            config.setInstantWidth(dialog.getWidth());
+            config.setInstantHeight(dialog.getHeight());
+        }
+        config.save();
     }
 
     /**
@@ -591,6 +702,43 @@ public class MainWindow extends JFrame {
         config.setShowFar(showFarCheck.isSelected());
         config.setShowLowPriority(showLowPriorityCheck.isSelected());
         config.setShowAllRepeat(showAllRepeatCheck.isSelected());
+        config.save();
+    }
+
+    /**
+     * 現在のウィンドウ状態（位置・サイズ・列幅・DEBパネル分割比率）をConfigへ書き込んで保存する
+     * （フェーズ4「き」。Main.shutdownAppから終了時に1回呼ばれる）。
+     * 最大化中は位置・サイズだけでなく列幅・分割比率も一切保存しない：どちらも最大化時の
+     * 窓サイズから導かれるピクセル値であり、ユーザーが選んだ寸法ではないため。保存してしまうと
+     * 次回「最大化ではないが画面いっぱいの窓」という中途半端な状態や、分割位置が範囲外の値で
+     * クランプされて動かなくなる不具合につながる。最大化中はConfigに一切触れず、前回保存された
+     * 値をそのまま残す（このガードだけで全項目を守る＝条件分岐を1箇所に集約する）。
+     */
+    public void saveWindowState() {
+        boolean maximized = (getExtendedState() & Frame.MAXIMIZED_BOTH) == Frame.MAXIMIZED_BOTH;
+        if (maximized) return;
+
+        config.setMainX(getX());
+        config.setMainY(getY());
+        config.setMainWidth(getWidth());
+        config.setMainHeight(getHeight());
+
+        var columnModel = table.getColumnModel();
+        int[] widths = new int[columnModel.getColumnCount()];
+        for (int i = 0; i < widths.length; i++) {
+            widths[i] = columnModel.getColumn(i).getWidth();
+        }
+        config.setTableColumnWidths(ColumnWidthsCodec.format(widths));
+
+        // 畳まれている間はsplitPane.getDividerLocation()が「畳んだ位置(下段高さ0)」を指すため、
+        // その値から比率を求めてしまわないよう、展開時の比率を保持しているsavedDividerRatioを使う
+        // （toggleDebugPanel参照。debugPanelOpen=falseなら現在は畳まれている）
+        int height = splitPane.getHeight();
+        double ratio = (debugPanelOpen && height > 0)
+                ? (double) splitPane.getDividerLocation() / height
+                : savedDividerRatio;
+        config.setMainDividerRatio(ratio);
+
         config.save();
     }
 
