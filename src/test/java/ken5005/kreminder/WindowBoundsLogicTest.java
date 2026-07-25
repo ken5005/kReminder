@@ -74,4 +74,41 @@ class WindowBoundsLogicTest {
                               List<MonitorBounds> monitors, WindowBoundsLogic.Resolved expected) {
         assertEquals(expected, WindowBoundsLogic.resolve(x, y, width, height, monitors));
     }
+
+    static Stream<Arguments> dialogSizeCases() {
+        return Stream.of(
+            Arguments.of("幅が未設定(UNSET)ならpackedそのまま",
+                Config.UNSET, 600, 400, 300, SINGLE_MONITOR,
+                new WindowBoundsLogic.DialogSize(400, 300)),
+
+            Arguments.of("高さが未設定(UNSET)ならpackedそのまま",
+                600, Config.UNSET, 400, 300, SINGLE_MONITOR,
+                new WindowBoundsLogic.DialogSize(400, 300)),
+
+            Arguments.of("保存値がpackedより小さければpackedまで広がる",
+                350, 250, 400, 300, SINGLE_MONITOR,
+                new WindowBoundsLogic.DialogSize(400, 300)),
+
+            Arguments.of("保存値が画面より大きければ画面まで縮む",
+                5000, 5000, 400, 300, SINGLE_MONITOR,
+                new WindowBoundsLogic.DialogSize(1920, 1080)),
+
+            Arguments.of("monitorsが空でも落ちず、上限を課さない",
+                5000, 3000, 400, 300, List.<MonitorBounds>of(),
+                new WindowBoundsLogic.DialogSize(5000, 3000)),
+
+            Arguments.of("上限(モニタ)が下限(packed)を下回る矛盾時は下限を優先",
+                5000, 5000, 400, 300, List.of(new MonitorBounds(0, 0, 300, 200)),
+                new WindowBoundsLogic.DialogSize(400, 300))
+        );
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("dialogSizeCases")
+    void resolveDialogSizeMatchesTable(String label, int savedWidth, int savedHeight,
+                                        int packedWidth, int packedHeight,
+                                        List<MonitorBounds> monitors, WindowBoundsLogic.DialogSize expected) {
+        assertEquals(expected,
+            WindowBoundsLogic.resolveDialogSize(savedWidth, savedHeight, packedWidth, packedHeight, monitors));
+    }
 }

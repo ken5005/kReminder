@@ -353,8 +353,7 @@ public class MainWindow extends JFrame {
         Reminder original = tableModel.getReminderAt(modelRow);
 
         var dialog = new EditDialog(this, original, clock);
-        dialog.setLocationRelativeTo(this);
-        dialog.setVisible(true); // モーダルなのでダイアログが閉じるまでここで待つ（この間にoriginalが消えうる）
+        showEditDialog(dialog, EditDialog.Mode.NORMAL, false); // モーダルなのでこの中で閉じるまで待つ（この間にoriginalが消えうる）
 
         if (!dialog.isOkPressed()) return; // キャンセル・Esc・×は何もしない（消えていてもそのまま＝仕様どおり）
 
@@ -446,9 +445,7 @@ public class MainWindow extends JFrame {
      */
     private boolean openEditorForNew(Reminder r, EditDialog.Mode mode, boolean alwaysOnTop) {
         var dialog = new EditDialog(this, r, clock, mode);
-        dialog.setLocationRelativeTo(this);
-        if (alwaysOnTop) dialog.setAlwaysOnTop(true);
-        dialog.setVisible(true);
+        showEditDialog(dialog, mode, alwaysOnTop);
 
         if (!dialog.isOkPressed()) return false; // キャンセル・Esc・×は追加しない
 
@@ -466,6 +463,51 @@ public class MainWindow extends JFrame {
         store.save(reminders);
         revealAddedRow(modelRow);
         return true;
+    }
+
+    /**
+     * EditDialogを開いて閉じるまでの共通処理（フェーズ4「き」step3）。onEditButton／
+     * openEditorForNewの2箇所が同じことをしていたためここへ集約した。
+     * dialogは呼び出し側で生成済み（コンストラクタ内でpack()済み＝この時点のサイズがpacked）。
+     * サイズの復元→位置設定→表示→サイズの保存、という順で行う。閉じた後の isOkPressed() 判定等は
+     * 呼び出し元がdialogを使って続ける。
+     */
+    private void showEditDialog(EditDialog dialog, EditDialog.Mode mode, boolean alwaysOnTop) {
+        int packedWidth = dialog.getWidth();
+        int packedHeight = dialog.getHeight();
+
+        boolean normal = mode == EditDialog.Mode.NORMAL;
+        int savedWidth = normal ? config.getEditWidth() : config.getInstantWidth();
+        int savedHeight = normal ? config.getEditHeight() : config.getInstantHeight();
+
+        WindowBoundsLogic.DialogSize size = WindowBoundsLogic.resolveDialogSize(
+            savedWidth, savedHeight, packedWidth, packedHeight, currentMonitorBounds());
+        dialog.setSize(size.width(), size.height());
+
+        // setLocationRelativeTo(null)は必ずsetSizeの後に呼ぶ：先に呼ぶと変更前のサイズを基準に
+        // 中央位置が計算され実際にはずれてしまう。nullを渡すのは親(this)ではなく画面中央に出すため
+        dialog.setLocationRelativeTo(null);
+
+        if (alwaysOnTop) dialog.setAlwaysOnTop(true);
+
+        dialog.setVisible(true); // モーダルなのでダイアログが閉じるまでここで待つ
+
+        // ここから先はダイアログが閉じた後。最終サイズをその場でConfigへ保存する。
+        // saveWindowState()（終了時）に相乗りしないのは、そちらがメインウィンドウ最大化中は
+        // 早期returnするため＝メインウィンドウを最大化したまま終了するとダイアログサイズだけ
+        // 永久に保存されなくなってしまう。ダイアログのサイズはメインウィンドウの最大化状態とは
+        // 無関係なので、そのガードの外側でここで保存する。
+        // 副作用：ここでのconfig.save()はwindow.main.*を「起動時に読んだ値」のまま書き出すが
+        // （ウィンドウを動かしてもその時点ではConfigに未反映のため）、終了時のsaveWindowState()が
+        // 正しい値で上書きするので最終結果には影響しない。
+        if (normal) {
+            config.setEditWidth(dialog.getWidth());
+            config.setEditHeight(dialog.getHeight());
+        } else {
+            config.setInstantWidth(dialog.getWidth());
+            config.setInstantHeight(dialog.getHeight());
+        }
+        config.save();
     }
 
     /**

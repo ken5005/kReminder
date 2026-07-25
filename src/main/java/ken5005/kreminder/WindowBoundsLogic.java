@@ -66,4 +66,39 @@ public final class WindowBoundsLogic {
         if (value < min) return min;
         return Math.min(value, max);
     }
+
+    /** resolveDialogSize() の結果。ダイアログは画面中央に出す設計のため位置は扱わない。 */
+    public record DialogSize(int width, int height) {}
+
+    /**
+     * 編集ダイアログのサイズを決める（フェーズ4「き」step3）。メインウィンドウのresolve()とは
+     * 下限の考え方が異なるため別メソッドにしている：メインウィンドウの MIN_WIDTH/MIN_HEIGHT は
+     * 固定の最小値だが、ダイアログの下限は「そのダイアログ自身がpack()で必要とした寸法
+     * (packedWidth/packedHeight)」であるべき＝それより縮めると中の欄が潰れる。
+     * savedWidth/savedHeightがConfig.UNSET(-1、一度も保存されていない)ならpackedをそのまま返す。
+     * 上限はmonitorsの先頭（プライマリ。ダイアログは中央寄せなのでこれで足りる）の表示領域。
+     * monitorsが空なら上限を課さない。上限が下限(packed)を下回る矛盾が起きた場合は下限を優先する
+     * （潰さない方を優先＝ユーザー入力欄が見えなくなる事故を避ける）。
+     */
+    public static DialogSize resolveDialogSize(int savedWidth, int savedHeight,
+                                                int packedWidth, int packedHeight,
+                                                List<MonitorBounds> monitors) {
+        if (savedWidth == Config.UNSET || savedHeight == Config.UNSET) {
+            return new DialogSize(packedWidth, packedHeight);
+        }
+
+        // 下限はpacked。保存値がそれより小さければpackedまで広げる
+        int width = Math.max(packedWidth, savedWidth);
+        int height = Math.max(packedHeight, savedHeight);
+
+        if (!monitors.isEmpty()) {
+            MonitorBounds primary = monitors.get(0);
+            // 上限はプライマリモニタの表示領域。Math.max(packed, ...)により、上限が下限を
+            // 下回る矛盾時はpacked（下限）の方が採用される
+            width = Math.min(width, Math.max(packedWidth, primary.width()));
+            height = Math.min(height, Math.max(packedHeight, primary.height()));
+        }
+
+        return new DialogSize(width, height);
+    }
 }
