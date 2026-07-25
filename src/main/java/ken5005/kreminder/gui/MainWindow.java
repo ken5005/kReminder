@@ -81,6 +81,16 @@ public class MainWindow extends JFrame {
         // ×ボタンで JVM ごと終了（常駐トレイ版とは切り離した学習用 main 前提）
         setDefaultCloseOperation(EXIT_ON_CLOSE);
 
+        // タスクバー/タイトルバーのアイコンを既定のコーヒーカップから差し替える。
+        // JDialogはタスクバーボタンを作らないため、JFrameであるここ1箇所で足りる
+        var iconUrl = getClass().getResource("/icons/Calendar.png");
+        if (iconUrl != null) {
+            setIconImage(new ImageIcon(iconUrl).getImage());
+        } else {
+            // アイコンが無いだけでアプリを落とすほどではないので、ログのみで起動は続行する
+            DEB.pr("タスクバーアイコンの読み込みに失敗しました: /icons/Calendar.png が見つかりません");
+        }
+
         // buildFilterBar() でチェックボックス初期値に使うため、UIを組む前に読み込む
         config.load();
 
