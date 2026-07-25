@@ -1,12 +1,12 @@
 # kReminder コード地図 v1
 
-最終更新: 2026-07-16（chat49 新規作成・main HEAD＝`v0.9.0` の実ソースから起こした）。
+最終更新: 2026-07-26（フェーズ4「き」＝ウィンドウ状態の保存/復元でクラス3つ新設）。
 
 このファイルは kReminder の**コード構造の正典**＝「どのクラスが何を担い、誰に依存するか」の地図。粒度は**クラス／パッケージ＋依存の向き**まで（メソッド単位は即腐るので書かない）。**設計判断の「なぜ」や急所は handoff A3 が正**（stale index ルール、発火ポップアップの owner=null 厳守など）＝この地図は骨格、handoff は骨格の理由。仕様の逐語は `docs/` の正典8冊が正。
 
 真実源はコード。この地図と実ソースが食い違ったら**実ソースが正**。メンテ規則は §5。
 
-対象＝`src/main/java` の本体63クラス（テスト22本・`docs/`・`testdata/` は対象外）。
+対象＝`src/main/java` の本体67クラス（テスト22本・`docs/`・`testdata/` は対象外）。
 
 ---
 
@@ -86,12 +86,15 @@ kReminder は「純関数層／Swing器層／静的ファサード＋ワーカ�
 | `ArgsParser` | 起動引数のパース純関数（Usage文言の置き場） | → Args |
 | `HolidayCheck` | 祝日判定の抽象（`@FunctionalInterface`・`isHoliday`＋`NONE`） | （葉・実装はholiday） |
 | `Const` | ユーザー調整用の定数集約（フォントサイズ・色） | （葉） |
+| `MonitorBounds` | モニタ1台分の表示領域を表す値の入れ物（record・AWT非依存） | （葉） |
+| `WindowBoundsLogic` | 保存されたウィンドウ矩形／ダイアログサイズを現在のモニタ構成に照らして安全化する純関数群 | → MonitorBounds, Config |
+| `ColumnWidthsCodec` | テーブル列幅とカンマ区切り文字列の相互変換（純関数） | （葉） |
 
 ### 3.2 `gui` — Swing の器
 
 | クラス | 責務 | 主な依存先 |
 |---|---|---|
-| `MainWindow` | メイン画面（JTable・フィルタバー・行操作・Extend導線・デバッグパネル） | → EditDialog, ReminderTableModel, DebugPanel／root多数(Config/CopyName/ExtName/EditFormLogic/FilterState/Reminder/ReminderFilter/ReminderStore)／debug.DEB |
+| `MainWindow` | メイン画面（JTable・フィルタバー・行操作・Extend導線・デバッグパネル） | → EditDialog, ReminderTableModel, DebugPanel／root多数(ColumnWidthsCodec/Config/CopyName/ExtName/EditFormLogic/FilterState/MonitorBounds/Reminder/ReminderFilter/ReminderStore/WindowBoundsLogic)／debug.DEB |
 | `EditDialog` | リマインダー編集ダイアログ（器・書き戻しはMainWindow側） | → DateTimeField, InstantField, ExecTimeInput／root(EditFormLogic/HolidayCheck/Reminder)／sound.SND |
 | `ExecTimeInput` | 「実行時刻」欄の契約IF（DateTimeField/InstantFieldが実装） | （契約） |
 | `DateTimeField` | 欄分割の日時入力ウィジェット（器） | implements ExecTimeInput／root(DateField/DateTimeFieldLogic/DateTimeFieldState) |
