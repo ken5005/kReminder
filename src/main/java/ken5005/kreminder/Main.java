@@ -622,12 +622,20 @@ public class Main {
             // ＝そうしないと2つのalwaysOnTop窓が被り、instant側が背後に隠れて読めなくなる
             JButton extend = new JButton("Extend");
             extend.addActionListener(e -> {
+                // EditDialogはDOCUMENT_MODAL（owner=MainWindow）だが、このポップアップはowner=null＝
+                // 別のドキュメントツリーにいるため、編集中でもポップアップ自体はクリック可能なまま。
+                // 放置するとExtendを何度でも押せてEditDialogが入れ子に生えるため、ボタン側で抑止する
+                // （owner=nullは設計上の厳守事項につき変更禁止）
+                ok.setEnabled(false);
+                extend.setEnabled(false);
                 dialog.setAlwaysOnTop(false);
                 boolean added = window.openExtendEditor(r);
                 if (added) {
                     dialog.dispose();
                 } else {
                     dialog.setAlwaysOnTop(true); // キャンセルなら最前面に復帰
+                    ok.setEnabled(true);
+                    extend.setEnabled(true);
                 }
             });
             south.add(extend);
