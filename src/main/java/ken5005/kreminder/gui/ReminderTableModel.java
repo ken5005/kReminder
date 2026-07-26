@@ -1,5 +1,6 @@
 package ken5005.kreminder.gui;
 
+import ken5005.kreminder.FireAtFormat;
 import ken5005.kreminder.Reminder;
 import ken5005.kreminder.RemainFormat;
 import ken5005.kreminder.RepeatSpec;
@@ -17,8 +18,8 @@ import java.util.List;
  * 内部を Object[][] で持つ必要がなくなり、ドメインオブジェクトを直接保持できる。
  * 必須メソッド3つ（getRowCount / getColumnCount / getValueAt）＋列名を実装するだけでよい。
  *
- * リピート列・残り時間列は純関数（RepeatSpec.toJapanese / RemainFormat.formatRemaining）で
- * 整形して返す。それ以外は Reminder の値をそのまま返す。
+ * リピート列・次回実行列・残り時間列は純関数（RepeatSpec.toJapanese / FireAtFormat.forList /
+ * RemainFormat.formatRemaining）で整形して返す。それ以外は Reminder の値をそのまま返す。
  */
 public class ReminderTableModel extends AbstractTableModel {
 
@@ -96,7 +97,7 @@ public class ReminderTableModel extends AbstractTableModel {
     }
 
     /**
-     * 指定セルの値を返す。列1（リピート）・列3（残り時間）は純関数で整形する。
+     * 指定セルの値を返す。列1（リピート）・列2（次回実行）・列3（残り時間）は純関数で整形する。
      * JTable はこの戻り値に対して toString() を呼んで表示する。
      */
     @Override
@@ -105,7 +106,10 @@ public class ReminderTableModel extends AbstractTableModel {
         return switch (col) {
             case 0 -> formatType(r.priority);
             case 1 -> formatRepeat(r.repeat);
-            case 2 -> r.fireAt;
+            // "yyyy/MM/dd(E) HH:mm[:ss]" は辞書順＝時系列順が保たれる書式なので、
+            // LocalDateTimeからStringに変えても既定ソート（次回実行↑）は壊れない。
+            // 将来この書式を変える場合はこの前提を崩さないよう注意すること。
+            case 2 -> formatFireAt(r.fireAt);
             case 3 -> formatRemain(r.fireAt);
             case 4 -> r.message;
             case 5 -> r.action;
@@ -128,6 +132,11 @@ public class ReminderTableModel extends AbstractTableModel {
         } catch (Exception e) {
             return repeat;
         }
+    }
+
+    // fireAt を一覧表示用の日本語日時に整形する（秒0なら秒を省く）。fireAt 未設定なら空欄。
+    private static String formatFireAt(LocalDateTime fireAt) {
+        return FireAtFormat.forList(fireAt);
     }
 
     // fireAt - now を残り時間表示に整形する。fireAt 未設定なら空欄。

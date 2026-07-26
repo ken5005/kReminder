@@ -18,11 +18,11 @@ public final class RemainFormat {
         long days = totalSeconds / 86400;
 
         if (days >= 5) {
-            return days + "日後";
+            return days + "日";
         }
         if (days >= 1) {
             long hours = (totalSeconds % 86400) / 3600;
-            return days + "日" + hours + "時間後";
+            return days + "日" + hours + "時間";
         }
 
         // ここから日数0
@@ -30,16 +30,16 @@ public final class RemainFormat {
             long hours = totalSeconds / 3600;
             long minutes = (totalSeconds % 3600) / 60;
             if (hours >= 1) {
-                return hours + "時間" + String.format("%02d", minutes) + "分後";
+                return hours + "時間" + String.format("%02d", minutes) + "分";
             }
-            return minutes + "分後";
+            return minutes + "分";
         }
 
         long minutes = totalSeconds / 60;
         long seconds = totalSeconds % 60;
         if (minutes >= 1) {
-            return minutes + "分" + seconds + "秒後";
+            return minutes + "分" + seconds + "秒";
         }
-        return seconds + "秒後";
+        return seconds + "秒";
     }
 }

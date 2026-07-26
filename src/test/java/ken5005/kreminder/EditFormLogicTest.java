@@ -89,7 +89,7 @@ class EditFormLogicTest {
     void buildPreview_repEmpty_singleShot() {
         LocalDateTime now = LocalDateTime.of(2026, 6, 24, 10, 0);
         String result = EditFormLogic.buildPreview("2026-06-24 15:30:00", "", now, HolidayCheck.NONE);
-        assertEquals("5時間30分後\n2026-06-24 15:30:00", result);
+        assertEquals("5時間30分\n2026/06/24(水) 15:30:00", result);
     }
 
     @Test
@@ -97,11 +97,10 @@ class EditFormLogicTest {
         LocalDateTime now = LocalDateTime.of(2026, 6, 1, 7, 0);
         String result = EditFormLogic.buildPreview("2026-06-01 08:00:00", "rep=1d", now, HolidayCheck.NONE);
 
-        StringBuilder expected = new StringBuilder("1時間00分後");
+        StringBuilder expected = new StringBuilder("1時間00分");
         LocalDateTime t = LocalDateTime.of(2026, 6, 1, 8, 0, 0);
         for (int i = 0; i < 10; i++) {
-            expected.append("\n").append(t.toLocalDate()).append(" ")
-                .append(String.format("%02d:%02d:%02d", t.getHour(), t.getMinute(), t.getSecond()));
+            expected.append("\n").append(FireAtFormat.withSeconds(t));
             t = t.plusDays(1);
         }
         assertEquals(expected.toString(), result);
@@ -113,11 +112,10 @@ class EditFormLogicTest {
         LocalDateTime now = LocalDateTime.of(2026, 6, 1, 7, 0);
         String result = EditFormLogic.buildPreview("2026-06-02 08:00:00", "rep=1d;in=4", now, HolidayCheck.NONE);
 
-        StringBuilder expected = new StringBuilder("3日1時間後");
+        StringBuilder expected = new StringBuilder("3日1時間");
         LocalDateTime t = LocalDateTime.of(2026, 6, 4, 8, 0, 0);
         for (int i = 0; i < 10; i++) {
-            expected.append("\n").append(t.toLocalDate()).append(" ")
-                .append(String.format("%02d:%02d:%02d", t.getHour(), t.getMinute(), t.getSecond()));
+            expected.append("\n").append(FireAtFormat.withSeconds(t));
             t = t.plusDays(7);
         }
         assertEquals(expected.toString(), result);
@@ -127,14 +125,14 @@ class EditFormLogicTest {
     void buildPreview_repInvalid_showsHelp() {
         LocalDateTime now = LocalDateTime.of(2026, 6, 24, 10, 0);
         String result = EditFormLogic.buildPreview("2026-06-24 15:30:00", "rep=1d;foo=3", now, HolidayCheck.NONE);
-        assertEquals("5時間30分後\n繰り返し書式エラー 例) rep=1d;ex=0,6 / rep=1M;day=25;kuriage", result);
+        assertEquals("5時間30分\n繰り返し書式エラー 例) rep=1d;ex=0,6 / rep=1M;day=25;kuriage", result);
     }
 
     @Test
     void buildPreview_pastFireAt_showsAlternateFirstLine() {
         LocalDateTime now = LocalDateTime.of(2026, 6, 24, 16, 0);
         String result = EditFormLogic.buildPreview("2026-06-24 15:30:00", "", now, HolidayCheck.NONE);
-        assertEquals("（発火済み）\n2026-06-24 15:30:00", result);
+        assertEquals("（発火済み）\n" + FireAtFormat.withSeconds(LocalDateTime.of(2026, 6, 24, 15, 30, 0)), result);
     }
 
     // needsEmptyCommentWarning: コメント非空/空・時間境界・非デフォルト条件・null安全 を表駆動で確認
