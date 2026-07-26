@@ -563,7 +563,8 @@ public class MainWindow extends JFrame {
     /**
      * 「削除」ボタン／Delete キーの導線（GUI仕様v2 §2.5.4）。
      * 選択行が無ければ何もしない。確認ダイアログで「はい」を選んだ場合のみ、
-     * リストから除去・保存・選択解除まで行う。
+     * リストから除去・保存まで行う。削除後は削除した行と同じビュー位置（直前まで1つ下に
+     * あった行）を選択し、フォーカスをテーブルへ戻す（連続削除を楽にするため・N4）。
      *
      * 【stale index対策】JOptionPane.showConfirmDialogもonEditButtonと同じくネストしたイベント
      * ループを回すため、確認待ちの間に対象が(Ext)自動削除で消えている可能性がある。
@@ -600,9 +601,29 @@ public class MainWindow extends JFrame {
             return;
         }
 
+        // 確認ダイアログを跨いで持ち越したビュー行(viewRow)はここでは使わない。モーダル中に
+        // 1秒tickのソート・フィルタ再適用や(Ext)自動削除で行が動いている可能性があるため、
+        // 削除の直前に改めてビュー行を引き直す（A3-9「モーダルを挟んでモデル行indexを持ち越さない」と同じ理由）
+        int viewRowBefore = sorter.convertRowIndexToView(currentRow);
+
         tableModel.removeReminderAt(currentRow);
         store.save(reminders);
-        table.clearSelection();
+
+        int rowCount = table.getRowCount(); // sorter適用後のビュー行数
+        if (viewRowBefore == -1 || rowCount == 0) {
+            // モーダル中にフィルタで隠れていた、または削除後に0行になった場合は選択できない
+            table.clearSelection();
+        } else {
+            // 削除した行と同じビュー位置＝直前まで1つ下にあった行を選択する。
+            // 最終行を削除した場合はMath.minで新しい最終行へ寄せる
+            int next = Math.min(viewRowBefore, rowCount - 1);
+            table.setRowSelectionInterval(next, next);
+            table.scrollRectToVisible(table.getCellRect(next, 0, true)); // revealAddedRowと同じ流儀
+        }
+        // 削除ボタン経由だとフォーカスがボタンに残り、テーブルのキーバインド（Delete/Space/Enter）は
+        // WHEN_FOCUSED なので連続削除できない。分岐に関係なくテーブルへフォーカスを戻す
+        table.requestFocusInWindow();
+
         statusBar.setText("削除しました");
     }
 
