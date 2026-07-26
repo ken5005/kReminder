@@ -100,6 +100,8 @@ public class Main {
     private static final List<PopupEntry> openPopups = new ArrayList<>();
     private static PopupEntry notifyingEntry;
     private static NotifyHandle notifyingHandle;
+    // Extend編集中（EditDialog表示中）だけtrue。継続音の担当を立てない（N7）
+    private static boolean notificationSuspended = false;
 
     public static void main(String[] args) {
         // 引数パース自体はArgsParser（純関数）に委譲。ここでは結果の受け取りとI/O判断のみ行う
@@ -535,6 +537,13 @@ public class Main {
      * 更新すれば自然に先着優先になる。
      */
     private static void retuneNotification() {
+        // Extend編集中は担当を立てない（N7）: openPopupsが空のときと同じ形で担当を降ろすだけにする
+        if (notificationSuspended) {
+            if (notifyingHandle != null) notifyingHandle.stop();
+            notifyingEntry = null;
+            notifyingHandle = null;
+            return;
+        }
         if (openPopups.isEmpty()) {
             if (notifyingHandle != null) notifyingHandle.stop();
             notifyingEntry = null;
@@ -622,12 +631,30 @@ public class Main {
             // ＝そうしないと2つのalwaysOnTop窓が被り、instant側が背後に隠れて読めなくなる
             JButton extend = new JButton("Extend");
             extend.addActionListener(e -> {
+                // EditDialogはDOCUMENT_MODAL（owner=MainWindow）だが、このポップアップはowner=null＝
+                // 別のドキュメントツリーにいるため、編集中でもポップアップ自体はクリック可能なまま。
+                // 放置するとExtendを何度でも押せてEditDialogが入れ子に生えるため、ボタン側で抑止する
+                // （owner=nullは設計上の厳守事項につき変更禁止）
+                ok.setEnabled(false);
+                extend.setEnabled(false);
                 dialog.setAlwaysOnTop(false);
-                boolean added = window.openExtendEditor(r);
+                // Extend編集中は継続音の担当を降ろす（N7）。openExtendEditorが例外を投げても
+                // 「鳴らない病」を残さないようfinallyで必ずsuspendを解除する
+                notificationSuspended = true;
+                retuneNotification(); // ここで継続音が止まる
+                boolean added;
+                try {
+                    added = window.openExtendEditor(r);
+                } finally {
+                    notificationSuspended = false;
+                }
                 if (added) {
-                    dialog.dispose();
+                    dialog.dispose(); // windowClosed経由でretuneNotificationが走り、鳴り直しはそちらに任せる
                 } else {
+                    ok.setEnabled(true);
+                    extend.setEnabled(true);
                     dialog.setAlwaysOnTop(true); // キャンセルなら最前面に復帰
+                    retuneNotification(); // 一時停止を解除して鳴り直す
                 }
             });
             south.add(extend);
@@ -638,6 +665,9 @@ public class Main {
         dialog.setMinimumSize(new Dimension(240, 100));
         placePopup(dialog);
         dialog.setAlwaysOnTop(true);
+        // 最前面だが非アクティブにする（N8）: 表示時に作業中のキー入力を奪わないため。
+        // 代償としてOK/Extendはキーボードで押せずマウス必須になる（GUI仕様v2 §5.1の受容済みトレードオフ）
+        dialog.setFocusableWindowState(false);
 
         // 自動消滅（Pri1のみ・autoCloseAfterが非null）: 単発Timerでdispose()する。
         // ダイアログがOK等で先に閉じられた場合に備え、windowClosedでTimerをstopする（生き残り防止）
