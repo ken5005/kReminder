@@ -8,9 +8,11 @@ import java.nio.file.Path;
 import java.util.Properties;
 
 /**
- * フィルタトグルの永続化設定（GUI仕様v2 §3.7・案A＝今回はフィルタ6トグルのみ）。
+ * config.properties の読み書き（正典＝docs/kReminder_Config仕様_v1.md）。
+ * フィルタ6トグル・snd.wav.dir・ウィンドウ状態・debug.enabled を保持する。
  * AppDir.base()\config.properties に読み書きする。
  * I/O 失敗は握ってデフォルト値のまま継続する（本体を落とさない・ReminderStore と同じ方針）。
+ * save() は毎回まっさらな Properties を作り直すため、ここが知らないキーは消える。
  */
 public class Config {
 
