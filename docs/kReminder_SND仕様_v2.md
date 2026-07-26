@@ -114,12 +114,16 @@ snd.wav.dir=C:\\tools2\\etc\\wav
 ```
 
 - キー名: `snd.wav.dir`。値: wav ファイルが入っているディレクトリの絶対パス。
-- **起動時に `Config` 経由で読む**。キーが存在しない場合はデフォルト値を config.properties に**書き込んでから**使う（「設定ファイルが説明的であること」方針＝`Config.load()` 時にキー欠けなら即 `save()`）。
+- **起動時に `Config` 経由で読む**。キーが存在しない場合はデフォルト値を書き戻してから使う
+  （「設定ファイルが説明的であること」方針）。**キーの既定値・書き戻しの仕組み・
+  `config.properties` 全体の扱いは `kReminder_Config仕様_v1.md` が正典。**
 - パスの存在確認は Main 側（→§9）。
 
 ### 6.2 sound-map のパス
 
-- `Config.getSoundMapPath()` → `%APPDATA%\kReminder\sound-map.properties`（APPDATA 不在時は user.home フォールバック＝config.properties と同じ規則）。
+- `Config.getSoundMapPath()` → `<base>/sound-map.properties`。`<base>` は起動時の
+  `--base` で決まるベースフォルダ（`AppDir` 経由・`config.properties` と同じ場所）。
+  詳細は `kReminder_デバッグ起動オプション仕様_v1.md`。
 
 ---
 
