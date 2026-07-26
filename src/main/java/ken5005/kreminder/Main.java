@@ -429,6 +429,7 @@ public class Main {
         for (Reminder r : reminders) {
             if (!r.noticed && r.fireAt != null && !r.fireAt.isAfter(now)) {
                 r.noticed = true;
+                DEB.pr("発火：" + r.message);
                 changed = true;
                 popupQueue.add(r);
                 reschedule(r, now);
@@ -439,7 +440,6 @@ public class Main {
         }
         for (Reminder r : extToRemove) {
             window.removeReminder(r);
-            DEB.pr("(Ext) 発火後自動削除: " + r.message);
         }
         if (changed) {
             pumpPopups();
