@@ -1,12 +1,12 @@
 # kReminder コード地図 v1
 
-最終更新: 2026-07-26（フェーズ4「き」＝ウィンドウ状態の保存/復元でクラス3つ新設）。
+最終更新: 2026-07-26（chat59 G1+G2 で表示整形の純関数 FireAtFormat を新設）。
 
 このファイルは kReminder の**コード構造の正典**＝「どのクラスが何を担い、誰に依存するか」の地図。粒度は**クラス／パッケージ＋依存の向き**まで（メソッド単位は即腐るので書かない）。**設計判断の「なぜ」や急所は handoff A3 が正**（stale index ルール、発火ポップアップの owner=null 厳守など）＝この地図は骨格、handoff は骨格の理由。仕様の逐語は `docs/` の正典8冊が正。
 
 真実源はコード。この地図と実ソースが食い違ったら**実ソースが正**。メンテ規則は §5。
 
-対象＝`src/main/java` の本体67クラス（テスト22本・`docs/`・`testdata/` は対象外）。
+対象＝`src/main/java` の本体68クラス（テスト23本・`docs/`・`testdata/` は対象外）。
 
 ---
 
@@ -49,7 +49,7 @@
 kReminder は「純関数層／Swing器層／静的ファサード＋ワーカー／配線ハブ」の4層。純関数層は Swing・java.io・Gson を import しない＝時刻非依存の表駆動テストが書ける（handoff A3-8/A3-9）。
 
 - **純関数・データ層**（`(root)` と各パッケージに散在・Swing/io非依存）
-  ドメイン：`Reminder`（データ）・`RepeatSpec`（繰り返しエンジン）・`ReminderFilter`＋`FilterState`・`EditFormLogic`・`DateTimeFieldLogic`＋`DateTimeFieldState`＋`DateField`・`InstantTimeLogic`・`RemainFormat`・`CopyName`・`ExtName`・`Args`＋`ArgsParser`
+  ドメイン：`Reminder`（データ）・`RepeatSpec`（繰り返しエンジン）・`ReminderFilter`＋`FilterState`・`EditFormLogic`・`DateTimeFieldLogic`＋`DateTimeFieldState`＋`DateField`・`InstantTimeLogic`・`RemainFormat`・`FireAtFormat`・`CopyName`・`ExtName`・`Args`＋`ArgsParser`
   各パッケージの純関数：`gui/PopupBehaviors`＋`PopupBehavior`／`sound/NotifyPatterns`＋`NotifyPattern`＋`NotifyStep`＋`SoundMapParser`＋`SoundMapBuilder`＋`WavLoader`／`debug/DebFormat`／`holiday/HolidayCsvParser`＋`HolidayService`(判定部)＋`HolidayTable`＋`OverlayHolidayCheck`／`lock/InstanceInfo`
 - **Swing器層**（`gui.*`）：`MainWindow`・`EditDialog`・`DateTimeField`・`InstantField`・`DebugPanel`・`ReminderTableModel`・`FatalErrorDialog`・`PanelSink`・`ExecTimeInput`(契約IF)
 - **静的ファサード＋専用ワーカー1本**（どこからでも呼べる・本体を止めない・例外を呑む）
@@ -71,12 +71,13 @@ kReminder は「純関数層／Swing器層／静的ファサード＋ワーカ�
 | `RepeatSpec` | 繰り返し文法のパーサ＋次回発火計算＋`toJapanese()`（純関数） | → HolidayCheck |
 | `ReminderFilter` | 一覧フィルタ判定の純関数群（§3.2短絡・バケツ・リードタイム） | → FilterState, Reminder, RepeatSpec |
 | `FilterState` | フィルタ6トグル＋検索文字列（record・不変） | （葉） |
-| `EditFormLogic` | 編集ダイアログ向け純関数（プレビュー・空コメント警告判定） | → HolidayCheck, RemainFormat, Reminder, RepeatSpec |
+| `EditFormLogic` | 編集ダイアログ向け純関数（プレビュー・空コメント警告判定） | → FireAtFormat, HolidayCheck, RemainFormat, Reminder, RepeatSpec |
 | `DateTimeFieldLogic` | 日時入力ウィジェットの状態遷移（純関数） | → DateField, DateTimeFieldState, EditFormLogic |
 | `DateTimeFieldState` | 日時入力の状態（record・不変） | → DateField |
 | `DateField` | 日時入力の6欄（enum） | （葉） |
 | `InstantTimeLogic` | instant欄（相対/絶対）のパース純関数（絶対throwしない） | （葉） |
 | `RemainFormat` | 残り時間を日本語1行に整形（純関数・Duration受け） | （葉） |
+| `FireAtFormat` | 日時を「yyyy/MM/dd(曜) HH:mm[:ss]」の日本語表示に整形（純関数・一覧用は秒0を省略） | （葉） |
 | `CopyName` | 複製時の`(copy)`採番規則（純関数） | （葉） |
 | `ExtName` | Extend時の`(Ext) `マーカー規則（純関数） | （葉） |
 | `Config` | フィルタトグルの永続化（`<base>/config.properties`） | → AppDir |
@@ -99,7 +100,7 @@ kReminder は「純関数層／Swing器層／静的ファサード＋ワーカ�
 | `ExecTimeInput` | 「実行時刻」欄の契約IF（DateTimeField/InstantFieldが実装） | （契約） |
 | `DateTimeField` | 欄分割の日時入力ウィジェット（器） | implements ExecTimeInput／root(DateField/DateTimeFieldLogic/DateTimeFieldState) |
 | `InstantField` | instant入力欄（器・解決済み絶対日時文字列を返す） | implements ExecTimeInput／root.InstantTimeLogic |
-| `ReminderTableModel` | JTableとList&lt;Reminder&gt;の橋渡し（Clock注入・1秒再描画） | → root(Reminder/RemainFormat/RepeatSpec) |
+| `ReminderTableModel` | JTableとList&lt;Reminder&gt;の橋渡し（Clock注入・1秒再描画） | → root(Reminder/RemainFormat/RepeatSpec/FireAtFormat) |
 | `PopupBehaviors` | priority→発火ポップアップ挙動の対応表（純関数） | → PopupBehavior／root.Reminder |
 | `PopupBehavior` | ポップアップ挙動（自動消滅時間＋Extend表示可否・record） | （葉） |
 | `DebugPanel` | デバッグログ表示パネル（薄いビュー） | （葉） |
