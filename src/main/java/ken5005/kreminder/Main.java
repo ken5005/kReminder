@@ -638,6 +638,9 @@ public class Main {
         dialog.setMinimumSize(new Dimension(240, 100));
         placePopup(dialog);
         dialog.setAlwaysOnTop(true);
+        // 最前面だが非アクティブにする（N8）: 表示時に作業中のキー入力を奪わないため。
+        // 代償としてOK/Extendはキーボードで押せずマウス必須になる（GUI仕様v2 §5.1の受容済みトレードオフ）
+        dialog.setFocusableWindowState(false);
 
         // 自動消滅（Pri1のみ・autoCloseAfterが非null）: 単発Timerでdispose()する。
         // ダイアログがOK等で先に閉じられた場合に備え、windowClosedでTimerをstopする（生き残り防止）
