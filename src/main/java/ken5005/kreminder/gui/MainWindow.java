@@ -27,6 +27,8 @@ import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -122,6 +124,13 @@ public class MainWindow extends JFrame {
 
         // Ctrl+N/Ctrl+D は窓スコープ（GUI仕様v2 §2.5.6）。EditDialog等の別窓にフォーカスがある間は発火しない
         setupWindowKeyBindings();
+
+        // 起動直後はテーブルにフォーカスを戻す（GUI仕様v2 §2.5.6・N5）。テーブルの3キー
+        // （Enter/Space/Delete）はWHEN_FOCUSEDなので、フォーカスが無いと起動直後のSpace=instantが効かない。
+        // setVisibleより前にrequestFocusInWindowしても効かないため、windowOpenedがフックの定位置
+        addWindowListener(new WindowAdapter() {
+            @Override public void windowOpened(WindowEvent e) { table.requestFocusInWindow(); }
+        });
     }
 
     /**
@@ -508,6 +517,11 @@ public class MainWindow extends JFrame {
             config.setInstantHeight(dialog.getHeight());
         }
         config.save();
+
+        // 新規／編集／複製／instant／Extendの5経路が全部このメソッドを通るためここに集約する（N5）。
+        // MainWindowが非アクティブなとき（発火ポップアップのExtend経由など）はrequestFocusInWindowが
+        // falseを返して何もしない＝ウィンドウを前面に奪ったりはしない
+        table.requestFocusInWindow();
     }
 
     /**
