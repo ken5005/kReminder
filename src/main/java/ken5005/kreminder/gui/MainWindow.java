@@ -96,8 +96,8 @@ public class MainWindow extends JFrame {
             savedDividerRatio = loadedRatio;
         }
 
-        // ×ボタンで JVM ごと終了（常駐トレイ版とは切り離した学習用 main 前提）
-        setDefaultCloseOperation(EXIT_ON_CLOSE);
+        // ×ボタンでは即終了せず、Main側のwindowClosingで終了確認ダイアログを出す
+        setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
 
         // タスクバー/タイトルバーのアイコンを既定のコーヒーカップから差し替える。
         // JDialogはタスクバーボタンを作らないため、JFrameであるここ1箇所で足りる

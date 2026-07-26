@@ -15,6 +15,7 @@ public final class EditFormLogic {
     private EditFormLogic() {
     }
 
+    // parseExecTime専用（内部受け渡し書式）。表示側はFireAtFormatに移したのでここでは使わない
     private static final DateTimeFormatter WITH_SECONDS =
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final DateTimeFormatter WITHOUT_SECONDS =
@@ -91,7 +92,7 @@ public final class EditFormLogic {
 
         String trimmedRep = repStr == null ? "" : repStr.trim();
         if (trimmedRep.isEmpty()) {
-            return firstLine + "\n" + fireAt.format(WITH_SECONDS);
+            return firstLine + "\n" + FireAtFormat.withSeconds(fireAt);
         }
 
         RepeatSpec spec;
@@ -111,7 +112,7 @@ public final class EditFormLogic {
         StringBuilder sb = new StringBuilder(correctedFirstLine);
         LocalDateTime t = first;
         for (int i = 0; i < PREVIEW_COUNT; i++) {
-            sb.append("\n").append(t.format(WITH_SECONDS));
+            sb.append("\n").append(FireAtFormat.withSeconds(t));
             if (i < PREVIEW_COUNT - 1) {
                 t = spec.next(t, holiday);
             }
