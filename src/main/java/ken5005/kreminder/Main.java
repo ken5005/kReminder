@@ -197,8 +197,26 @@ public class Main {
             window.addWindowListener(new WindowAdapter() {
                 @Override
                 public void windowClosing(WindowEvent e) {
-                    // EXIT_ON_CLOSEなのでこの後Swingが自分でJVMを落とす＝System.exitはここでは呼ばない
+                    // debug.enabled時は確認なしで即終了。それ以外は誤操作防止のため確認ダイアログを挟む
+                    if (config.isDebugEnabled()) {
+                        shutdownApp();
+                        System.exit(0);
+                        return;
+                    }
+                    String[] options = {"はい", "いいえ"};
+                    int selected = JOptionPane.showOptionDialog(
+                        window,
+                        "kReminder を終了します。よろしいですか？",
+                        "終了確認",
+                        JOptionPane.DEFAULT_OPTION,
+                        JOptionPane.QUESTION_MESSAGE,
+                        null,
+                        options,
+                        options[1]); // 既定選択は「いいえ」（誤ってEnterを押しても終了しないように）
+                    // 「はい」（0）以外＝「いいえ」／×／Escapeはすべて何もせず戻る
+                    if (selected != 0) return;
                     shutdownApp();
+                    System.exit(0);
                 }
             });
             window.setVisible(true);
@@ -694,7 +712,7 @@ public class Main {
      * 呼ばれてもここを通る。全経路EDT上（ActionListener・windowClosing・Timerコールバックは
      * すべてEDTから呼ばれる）なので同期は不要。多重に呼ばれても副作用が起きないよう
      * 冒頭でガードする（＝冪等）。System.exitは呼び出し側の事情が異なるためここには含めない
-     * （トレイExitはSystem.exit(0)を続けて呼ぶ／windowClosingはEXIT_ON_CLOSEがJVMを落とす）。
+     * （トレイExitは即座に／windowClosingは終了確認で「はい」が選ばれた後にSystem.exit(0)を続けて呼ぶ）。
      */
     private static void shutdownApp() {
         if (shutdownDone) return;
