@@ -100,6 +100,8 @@ public class Main {
     private static final List<PopupEntry> openPopups = new ArrayList<>();
     private static PopupEntry notifyingEntry;
     private static NotifyHandle notifyingHandle;
+    // Extend編集中（EditDialog表示中）だけtrue。継続音の担当を立てない（N7）
+    private static boolean notificationSuspended = false;
 
     public static void main(String[] args) {
         // 引数パース自体はArgsParser（純関数）に委譲。ここでは結果の受け取りとI/O判断のみ行う
@@ -535,6 +537,13 @@ public class Main {
      * 更新すれば自然に先着優先になる。
      */
     private static void retuneNotification() {
+        // Extend編集中は担当を立てない（N7）: openPopupsが空のときと同じ形で担当を降ろすだけにする
+        if (notificationSuspended) {
+            if (notifyingHandle != null) notifyingHandle.stop();
+            notifyingEntry = null;
+            notifyingHandle = null;
+            return;
+        }
         if (openPopups.isEmpty()) {
             if (notifyingHandle != null) notifyingHandle.stop();
             notifyingEntry = null;
@@ -629,13 +638,23 @@ public class Main {
                 ok.setEnabled(false);
                 extend.setEnabled(false);
                 dialog.setAlwaysOnTop(false);
-                boolean added = window.openExtendEditor(r);
+                // Extend編集中は継続音の担当を降ろす（N7）。openExtendEditorが例外を投げても
+                // 「鳴らない病」を残さないようfinallyで必ずsuspendを解除する
+                notificationSuspended = true;
+                retuneNotification(); // ここで継続音が止まる
+                boolean added;
+                try {
+                    added = window.openExtendEditor(r);
+                } finally {
+                    notificationSuspended = false;
+                }
                 if (added) {
-                    dialog.dispose();
+                    dialog.dispose(); // windowClosed経由でretuneNotificationが走り、鳴り直しはそちらに任せる
                 } else {
-                    dialog.setAlwaysOnTop(true); // キャンセルなら最前面に復帰
                     ok.setEnabled(true);
                     extend.setEnabled(true);
+                    dialog.setAlwaysOnTop(true); // キャンセルなら最前面に復帰
+                    retuneNotification(); // 一時停止を解除して鳴り直す
                 }
             });
             south.add(extend);
