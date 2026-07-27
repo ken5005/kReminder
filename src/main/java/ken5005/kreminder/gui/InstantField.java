@@ -34,6 +34,8 @@ public class InstantField extends JPanel implements ExecTimeInput {
         this.clock = clock;
         setLayout(new BorderLayout());
         textField.setFont(textField.getFont().deriveFont((float) Const.FONT_SIZE_EDIT_FIELD));
+        // 実行時刻欄はIME自動OFF対象（N9(c)）。実際にフォーカスを受けるのはパネルでなく内部のtextField側
+        ImeControl.off(textField);
         add(textField, BorderLayout.CENTER);
 
         // 空欄からスタート＝§4.4「空欄はエラー」を初手から反映しておく

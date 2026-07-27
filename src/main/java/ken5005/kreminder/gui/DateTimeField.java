@@ -41,6 +41,7 @@ public class DateTimeField extends JPanel implements ExecTimeInput {
     public DateTimeField() {
         setLayout(new FlowLayout(FlowLayout.LEFT, 2, 0));
         setFocusable(true);
+        ImeControl.off(this); // 実行時刻欄はIME自動OFF対象（N9(c)）。フォーカスは自分自身（パネル代表）が受ける
 
         addField(DateField.YEAR);
         addSeparator("-");
