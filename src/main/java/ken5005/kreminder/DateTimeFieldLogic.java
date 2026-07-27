@@ -20,7 +20,7 @@ public final class DateTimeFieldLogic {
      */
     public static DateTimeFieldState initial(LocalDateTime dt) {
         return new DateTimeFieldState(dt.getYear(), dt.getMonthValue(), dt.getDayOfMonth(),
-            dt.getHour(), dt.getMinute(), dt.getSecond(), DateField.DAY, null);
+            dt.getHour(), dt.getMinute(), dt.getSecond(), DateField.DAY, null, false);
     }
 
     /**
@@ -33,10 +33,12 @@ public final class DateTimeFieldLogic {
         DateField field = s.cursor();
         String newBuffer = (s.buffer() == null ? "" : s.buffer()) + digit;
         if (newBuffer.length() < field.width) {
-            return withCursorBuffer(s, field, newBuffer);
+            // まだ同じ欄に留まる（欄離脱ではない）ので touched は変化させない
+            return withCursorBuffer(s, field, newBuffer, s.touched());
         }
         DateTimeFieldState confirmed = withValue(s, field, Integer.parseInt(newBuffer));
-        return withCursorBuffer(confirmed, nextField(field), null);
+        // 欄幅を満たして隣欄へ自動送り（＝欄離脱）なので touched=false に戻す
+        return withCursorBuffer(confirmed, nextField(field), null, false);
     }
 
     /** ←キー。未完バッファをゼロ埋め確定してから左隣へ（左端では留まる）。カーソル無活性時は無反応。 */
@@ -55,13 +57,14 @@ public final class DateTimeFieldLogic {
         DateField[] all = DateField.values();
         int idx = committed.cursor().ordinal() + dir;
         DateField target = (idx < 0 || idx >= all.length) ? committed.cursor() : all[idx];
-        return withCursorBuffer(committed, target, null);
+        // 欄移動コマンドなので touched=false に戻す（端で留まる場合も含め一律）
+        return withCursorBuffer(committed, target, null, false);
     }
 
     /** 欄クリック。現欄をゼロ埋め確定してから指定欄へ移動しバッファを新規化する（無活性からの再活性化も兼ねる）。 */
     public static DateTimeFieldState clickField(DateTimeFieldState s, DateField field) {
         DateTimeFieldState committed = commitBuffer(s);
-        return withCursorBuffer(committed, field, null);
+        return withCursorBuffer(committed, field, null, false);
     }
 
     /** Enter。現欄の未完バッファをゼロ埋め確定しカーソルを消滅させる（deactivate と同一動作）。 */
@@ -70,9 +73,10 @@ public final class DateTimeFieldLogic {
     }
 
     /**
-     * Space。カーソル欄の入力バッファが活性中（打ちかけがある）なら、その打ちかけをゼロ埋め確定し
-     * （現欄は打った値のまま）、下位（カーソルより右）の欄だけを最小値にする。
-     * バッファが非活性（欄に居るがまだ何も打っていない＝再進入直後や自動送り直後）なら、
+     * Space。カーソル欄の入力バッファが活性中（打ちかけがある）、または現欄が↑↓／ホイールで
+     * 編集済み（touched）なら、その値をゼロ埋め確定し（現欄は打った/増減した値のまま）、
+     * 下位（カーソルより右）の欄だけを最小値にする。
+     * どちらでもない（欄に居るがまだ何も編集していない＝再進入直後や自動送り直後）なら、
      * 現欄を含めて最小値にする（例: 時を打ち終えて分へ自動送りされた直後にSpaceを押した場合、
      * 分自身もクリアされないと「23:45:55」から「1」「2」「Space」で「12:00:00」にならない）。
      * いずれも確定後カーソル消滅。
@@ -80,28 +84,29 @@ public final class DateTimeFieldLogic {
     public static DateTimeFieldState pressSpace(DateTimeFieldState s) {
         if (s.cursor() == null) return s;
         DateField cursorField = s.cursor();
-        boolean bufferActive = s.buffer() != null;
+        boolean keepCursorValue = s.buffer() != null || s.touched();
         DateTimeFieldState committed = commitBuffer(s);
-        DateTimeFieldState filled = fillFromMinimum(committed, cursorField, bufferActive);
-        return withCursorBuffer(filled, null, null);
+        DateTimeFieldState filled = fillFromMinimum(committed, cursorField, keepCursorValue);
+        return withCursorBuffer(filled, null, null, false);
     }
 
     /** 閉店（フォーカスロスト・他コンポーネント操作等）。未完バッファをゼロ埋め確定しカーソルを消滅させる。 */
     public static DateTimeFieldState deactivate(DateTimeFieldState s) {
         DateTimeFieldState committed = commitBuffer(s);
-        return withCursorBuffer(committed, null, null);
+        return withCursorBuffer(committed, null, null, false);
     }
 
     /**
      * ↑↓キー／マウスホイール。delta は +1 か -1。カーソル無活性時は無反応。
-     * まず未完バッファをゼロ埋め確定し、その時点の合成値が不正なら増減自体を行わない。
+     * まず未完バッファをゼロ埋め確定し、その時点の合成値が不正なら増減自体を行わない
+     * （この場合 touched も変化しない）。実際に増減できた場合のみ touched=true にする。
      */
     public static DateTimeFieldState stepUpDown(DateTimeFieldState s, int delta) {
         if (s.cursor() == null) return s;
         DateTimeFieldState committed = commitBuffer(s);
         if (!isValid(committed)) return committed;
 
-        return switch (committed.cursor()) {
+        DateTimeFieldState stepped = switch (committed.cursor()) {
             case SECOND -> withValue(committed, DateField.SECOND, wrap(committed.second() + delta, 0, 59));
             case MINUTE -> withValue(committed, DateField.MINUTE, wrap(committed.minute() + delta, 0, 59));
             case HOUR -> withValue(committed, DateField.HOUR, wrap(committed.hour() + delta, 0, 23));
@@ -109,6 +114,7 @@ public final class DateTimeFieldLogic {
             case DAY -> adjustDay(committed, delta);
             case YEAR -> adjustYear(committed, delta);
         };
+        return withTouched(stepped, true);
     }
 
     private static DateTimeFieldState adjustMonth(DateTimeFieldState s, int delta) {
@@ -178,7 +184,8 @@ public final class DateTimeFieldLogic {
         if (s.cursor() == null || s.buffer() == null) return s;
         int value = Integer.parseInt(zeroPad(s.buffer(), s.cursor().width));
         DateTimeFieldState updated = withValue(s, s.cursor(), value);
-        return withCursorBuffer(updated, updated.cursor(), null);
+        // 確定するだけで欄離脱ではないので touched は維持する
+        return withCursorBuffer(updated, updated.cursor(), null, updated.touched());
     }
 
     private static DateField nextField(DateField f) {
@@ -217,16 +224,20 @@ public final class DateTimeFieldLogic {
 
     private static DateTimeFieldState withValue(DateTimeFieldState s, DateField f, int v) {
         return switch (f) {
-            case YEAR -> new DateTimeFieldState(v, s.month(), s.day(), s.hour(), s.minute(), s.second(), s.cursor(), s.buffer());
-            case MONTH -> new DateTimeFieldState(s.year(), v, s.day(), s.hour(), s.minute(), s.second(), s.cursor(), s.buffer());
-            case DAY -> new DateTimeFieldState(s.year(), s.month(), v, s.hour(), s.minute(), s.second(), s.cursor(), s.buffer());
-            case HOUR -> new DateTimeFieldState(s.year(), s.month(), s.day(), v, s.minute(), s.second(), s.cursor(), s.buffer());
-            case MINUTE -> new DateTimeFieldState(s.year(), s.month(), s.day(), s.hour(), v, s.second(), s.cursor(), s.buffer());
-            case SECOND -> new DateTimeFieldState(s.year(), s.month(), s.day(), s.hour(), s.minute(), v, s.cursor(), s.buffer());
+            case YEAR -> new DateTimeFieldState(v, s.month(), s.day(), s.hour(), s.minute(), s.second(), s.cursor(), s.buffer(), s.touched());
+            case MONTH -> new DateTimeFieldState(s.year(), v, s.day(), s.hour(), s.minute(), s.second(), s.cursor(), s.buffer(), s.touched());
+            case DAY -> new DateTimeFieldState(s.year(), s.month(), v, s.hour(), s.minute(), s.second(), s.cursor(), s.buffer(), s.touched());
+            case HOUR -> new DateTimeFieldState(s.year(), s.month(), s.day(), v, s.minute(), s.second(), s.cursor(), s.buffer(), s.touched());
+            case MINUTE -> new DateTimeFieldState(s.year(), s.month(), s.day(), s.hour(), v, s.second(), s.cursor(), s.buffer(), s.touched());
+            case SECOND -> new DateTimeFieldState(s.year(), s.month(), s.day(), s.hour(), s.minute(), v, s.cursor(), s.buffer(), s.touched());
         };
     }
 
-    private static DateTimeFieldState withCursorBuffer(DateTimeFieldState s, DateField cursor, String buffer) {
-        return new DateTimeFieldState(s.year(), s.month(), s.day(), s.hour(), s.minute(), s.second(), cursor, buffer);
+    private static DateTimeFieldState withCursorBuffer(DateTimeFieldState s, DateField cursor, String buffer, boolean touched) {
+        return new DateTimeFieldState(s.year(), s.month(), s.day(), s.hour(), s.minute(), s.second(), cursor, buffer, touched);
+    }
+
+    private static DateTimeFieldState withTouched(DateTimeFieldState s, boolean touched) {
+        return new DateTimeFieldState(s.year(), s.month(), s.day(), s.hour(), s.minute(), s.second(), s.cursor(), s.buffer(), touched);
     }
 }

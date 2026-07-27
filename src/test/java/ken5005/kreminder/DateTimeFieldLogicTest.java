@@ -6,6 +6,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.time.LocalDateTime;
+import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -310,10 +311,87 @@ class DateTimeFieldLogicTest {
         DateTimeFieldState backAtHour = DateTimeFieldLogic.moveLeft(s);
         assertEquals(DateField.HOUR, backAtHour.cursor());
         assertEquals(25, backAtHour.hour());
+        assertFalse(backAtHour.touched());
         assertTrue(EditFormLogic.parseExecTime(DateTimeFieldLogic.composeText(backAtHour)).isEmpty());
 
         DateTimeFieldState result = DateTimeFieldLogic.stepUpDown(backAtHour, 1);
-        assertEquals(backAtHour, result); // no-op
+        assertEquals(backAtHour, result); // no-op（値もtouchedも変化しない）
+        assertFalse(result.touched());
+    }
+
+    // touched: stepUpDownで実際に増減できた場合のみtouched=trueになり、
+    // その直後のSpaceは現欄の値を活かして下位のみ最小化する（N11の本題）
+    @Test
+    void stepUpDownSetsTouchedAndSpaceKeepsCursorValue() {
+        DateTimeFieldState s = withFieldValue(base(), DateField.HOUR, 12);
+        s = DateTimeFieldLogic.clickField(s, DateField.HOUR);
+        assertFalse(s.touched());
+
+        DateTimeFieldState stepped = DateTimeFieldLogic.stepUpDown(s, -1);
+        assertEquals(11, stepped.hour());
+        assertTrue(stepped.touched());
+
+        DateTimeFieldState result = DateTimeFieldLogic.pressSpace(stepped);
+        assertEquals(11, result.hour());  // touchedにより時は活かされる（現状のバグでは0になっていた）
+        assertEquals(0, result.minute());
+        assertEquals(0, result.second());
+        assertNull(result.cursor());
+    }
+
+    // 回帰: 打鍵による自動送り（touchedは立たない経路）は従来どおりSpaceで現欄含め最小化される
+    @Test
+    void typedFieldAutoAdvanceStaysUntouchedAndSpaceMinimizesCursorFieldToo() {
+        DateTimeFieldState s = DateTimeFieldLogic.clickField(base(), DateField.HOUR);
+        s = DateTimeFieldLogic.typeDigit(s, 1);
+        s = DateTimeFieldLogic.typeDigit(s, 1); // hour=11確定・自動送りでMINUTEへ
+        assertEquals(DateField.MINUTE, s.cursor());
+        assertFalse(s.touched());
+
+        DateTimeFieldState result = DateTimeFieldLogic.pressSpace(s);
+        assertEquals(11, result.hour());  // 打鍵した時はそのまま
+        assertEquals(0, result.minute()); // 自動送り先の分自身もクリアされる（touchedではないため）
+        assertEquals(0, result.second());
+        assertNull(result.cursor());
+    }
+
+    // touchedは欄離脱／消滅で解除される：stepUpDown後にmove/clickFieldで移った先の欄は
+    // 「未編集」扱いになり、Spaceでその欄自身も最小化される
+    static Stream<Arguments> touchedResetOnLeaveCases() {
+        return Stream.of(
+            Arguments.of((UnaryOperator<DateTimeFieldState>) DateTimeFieldLogic::moveLeft, DateField.DAY, 1),
+            Arguments.of((UnaryOperator<DateTimeFieldState>) DateTimeFieldLogic::moveRight, DateField.MINUTE, 0),
+            Arguments.of((UnaryOperator<DateTimeFieldState>) (s -> DateTimeFieldLogic.clickField(s, DateField.SECOND)), DateField.SECOND, 0)
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("touchedResetOnLeaveCases")
+    void touchedResetsWhenCursorLeavesField(UnaryOperator<DateTimeFieldState> leaveTransition,
+                                             DateField expectedCursorField, int expectedMinValue) {
+        DateTimeFieldState s = DateTimeFieldLogic.clickField(base(), DateField.HOUR);
+        s = DateTimeFieldLogic.stepUpDown(s, 1); // hour touched=true
+        assertTrue(s.touched());
+
+        DateTimeFieldState moved = leaveTransition.apply(s);
+        assertEquals(expectedCursorField, moved.cursor());
+        assertFalse(moved.touched()); // 欄離脱でtouchedは解除される
+
+        DateTimeFieldState result = DateTimeFieldLogic.pressSpace(moved);
+        assertEquals(expectedMinValue, valueOf(result, expectedCursorField)); // 移動先欄自身も最小化＝未編集扱い
+        assertNull(result.cursor());
+    }
+
+    // stepUpDown: バッファ活性中（打ちかけあり）でも確定＋増減が行われtouched=trueになる
+    @Test
+    void stepUpDownWithActiveBufferCommitsAppliesDeltaAndSetsTouched() {
+        DateTimeFieldState s = DateTimeFieldLogic.clickField(base(), DateField.DAY);
+        s = DateTimeFieldLogic.typeDigit(s, 1); // バッファ"1"（幅2未達で活性中）
+        assertFalse(s.touched());
+
+        DateTimeFieldState result = DateTimeFieldLogic.stepUpDown(s, 1);
+        assertEquals(2, result.day()); // "1" -> ゼロ埋め01確定 -> +1で2
+        assertTrue(result.touched());
+        assertNull(result.buffer());
     }
 
     // composeText: バッファ活性中はゼロ埋め解釈で合成される
@@ -326,12 +404,12 @@ class DateTimeFieldLogicTest {
 
     private static DateTimeFieldState withFieldValue(DateTimeFieldState s, DateField field, int value) {
         return switch (field) {
-            case YEAR -> new DateTimeFieldState(value, s.month(), s.day(), s.hour(), s.minute(), s.second(), s.cursor(), s.buffer());
-            case MONTH -> new DateTimeFieldState(s.year(), value, s.day(), s.hour(), s.minute(), s.second(), s.cursor(), s.buffer());
-            case DAY -> new DateTimeFieldState(s.year(), s.month(), value, s.hour(), s.minute(), s.second(), s.cursor(), s.buffer());
-            case HOUR -> new DateTimeFieldState(s.year(), s.month(), s.day(), value, s.minute(), s.second(), s.cursor(), s.buffer());
-            case MINUTE -> new DateTimeFieldState(s.year(), s.month(), s.day(), s.hour(), value, s.second(), s.cursor(), s.buffer());
-            case SECOND -> new DateTimeFieldState(s.year(), s.month(), s.day(), s.hour(), s.minute(), value, s.cursor(), s.buffer());
+            case YEAR -> new DateTimeFieldState(value, s.month(), s.day(), s.hour(), s.minute(), s.second(), s.cursor(), s.buffer(), s.touched());
+            case MONTH -> new DateTimeFieldState(s.year(), value, s.day(), s.hour(), s.minute(), s.second(), s.cursor(), s.buffer(), s.touched());
+            case DAY -> new DateTimeFieldState(s.year(), s.month(), value, s.hour(), s.minute(), s.second(), s.cursor(), s.buffer(), s.touched());
+            case HOUR -> new DateTimeFieldState(s.year(), s.month(), s.day(), value, s.minute(), s.second(), s.cursor(), s.buffer(), s.touched());
+            case MINUTE -> new DateTimeFieldState(s.year(), s.month(), s.day(), s.hour(), value, s.second(), s.cursor(), s.buffer(), s.touched());
+            case SECOND -> new DateTimeFieldState(s.year(), s.month(), s.day(), s.hour(), s.minute(), value, s.cursor(), s.buffer(), s.touched());
         };
     }
 
