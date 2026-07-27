@@ -80,7 +80,7 @@ public class DateTimeField extends JPanel implements ExecTimeInput {
         return state == null ? "" : DateTimeFieldLogic.composeText(state);
     }
 
-    /** カーソルが活性中（＝未確定の編集中）かどうか。OK活性判定に使う。 */
+    /** カーソルが活性中（＝未確定の編集中）かどうか。OK活性の判定には使わない（N10）。 */
     public boolean isEditing() {
         return state != null && state.cursor() != null;
     }
