@@ -19,7 +19,7 @@ public interface ExecTimeInput {
     /** 正規の絶対日時文字列（"yyyy-MM-dd HH:mm:ss"）。不正入力時は不正な文字列でよい（EditFormLogic側でemptyになる）。 */
     String getExecTimeText();
 
-    /** 未確定の編集中か（OK活性のgateに使う）。 */
+    /** 未確定の編集中か（カーソル活性中）。OK活性の判定には使わない（N10）。 */
     boolean isEditing();
 
     /** 状態変化のたびに呼ばれる。 */

@@ -184,10 +184,10 @@ public class EditDialog extends JDialog {
             previewArea.setText(preview);
             previewArea.setCaretPosition(0);
         }
-        // カーソル活性中（未確定の編集中）はOKを押せない（§4.8）
+        // OK活性はisTotallyValidのみで判定する（カーソル活性中かは問わない・N10）。
+        // getExecTimeTextはカーソル活性中もゼロ埋め解釈で常に完全な日時を合成するためgate不要
         okButton.setEnabled(
-            EditFormLogic.isTotallyValid(execTimeField.getExecTimeText(), repeatField.getText())
-                && !execTimeField.isEditing());
+            EditFormLogic.isTotallyValid(execTimeField.getExecTimeText(), repeatField.getText()));
     }
 
     /** ラベル＋入力欄をGridBagLayoutで縦に並べ、最終行にプレビュー欄を置く。 */
