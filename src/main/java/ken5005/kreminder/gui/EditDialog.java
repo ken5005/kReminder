@@ -63,6 +63,12 @@ public class EditDialog extends JDialog {
                 Dialog.ModalityType.DOCUMENT_MODAL);
         this.clock = clock;
         this.execTimeField = mode == Mode.INSTANT ? new InstantField(clock) : new DateTimeField();
+        // IME自動On/Off（N9(c)）。実行時刻欄は各ウィジェット側で自己配線済みのためここでは触らない
+        ImeControl.off(repeatField);
+        ImeControl.off(cmdField);
+        ImeControl.on(commentArea);
+        // ダイアログがモーダル表示で活性化された瞬間にも、その時点のフォーカス保持者へ掛け直す（N9(c)）
+        ImeControl.installWindowHook(this);
 
         // 選択行の既存値、または新規/複製でMainWindowが用意したReminderの値を各欄へ流し込む。
         // fireAtは呼び出し側が必ず非nullで渡す（編集=既存値、新規/複製=現在日時・秒0丸め）
@@ -137,10 +143,18 @@ public class EditDialog extends JDialog {
         // OKボタンの見た目（太枠）のために残す。Enterの実処理は上のokOrGonバインドが担う（v1.2）
         getRootPane().setDefaultButton(okButton);
 
+        // ×ボタンはJDialogの既定(HIDE_ON_CLOSE)だとsetVisible(false)だけでdispose()を素通りしてしまう。
+        // OK・キャンセル・Escと同じくdispose()に集約させ、previewTimer停止・IME復帰(N9(c))を確実に効かせる
+        setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
+
         // ダイアログを開いた時点でカーソルは日欄で活性（§4.8）＝実キーボードフォーカスもそこへ当てる
         addWindowListener(new WindowAdapter() {
             @Override public void windowOpened(WindowEvent e) {
                 execTimeField.getComponent().requestFocusInWindow();
+            }
+
+            @Override public void windowClosing(WindowEvent e) {
+                dispose();
             }
         });
 
@@ -156,12 +170,17 @@ public class EditDialog extends JDialog {
     }
 
     /**
-     * ダイアログを閉じる（OK・キャンセル・Esc・×ボタンいずれも最終的にここを通る）。
+     * ダイアログを閉じる（OK・キャンセル・Esc・×ボタンいずれも最終的にここを通る。
+     * ×はwindowClosing→dispose()で集約している）。
      * previewTimerを止め忘れるとダイアログを閉じた後も裏で1秒ごとに動き続けてしまうため、
      * dispose()をオーバーライドして一律停止する。
+     * IMEを全角のまま閉じるとMainWindowへ戻ってからの掛け直し（installWindowHook）が
+     * フォーカス移譲のタイミング次第で空振りすることがあるため（N9(c)）、
+     * まだ表示中＝InputContextが取れるうちにここで自ら半角へ倒しておく
      */
     @Override
     public void dispose() {
+        ImeControl.applyOff(this);
         if (previewTimer != null) previewTimer.stop();
         super.dispose();
     }

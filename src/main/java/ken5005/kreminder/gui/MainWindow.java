@@ -115,6 +115,10 @@ public class MainWindow extends JFrame {
         getContentPane().add(buildSplitPane(), BorderLayout.CENTER);
         getContentPane().add(statusBar,       BorderLayout.SOUTH);
 
+        // 起動直後・EditDialogから戻った直後はfocusGainedがウィンドウ活性化より先に飛ぶことがあるため、
+        // ウィンドウ活性化のタイミングでも改めてIME状態を掛け直す（N9(c)）
+        ImeControl.installWindowHook(this);
+
         // buildSplitPane()内のbuildTable()でtableが組まれた直後＝列がすべて揃ってから列幅を反映する
         applyColumnWidths();
 
@@ -275,6 +279,7 @@ public class MainWindow extends JFrame {
         bar.add(searchLabel);
         searchField = new JTextField(10);
         setFontSize(searchField, Const.FONT_SIZE_SEARCH);
+        ImeControl.on(searchField); // 検索欄は日本語コメント検索を想定しIME自動ON対象（N9(c)）
         // 1文字打つたびに再適用（検索は上書き層＝トグル無視でコメント一致のみ表示に切り替わる）
         searchField.getDocument().addDocumentListener(new DocumentListener() {
             @Override public void insertUpdate(DocumentEvent e) { applyFilter(); }
@@ -647,6 +652,7 @@ public class MainWindow extends JFrame {
         table = new JTable(tableModel);
         // 複数選択は今回対象外（GUI仕様v2 §2.5）。新規/複製/削除は常に単一の対象行に対して働く
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        ImeControl.off(table); // テーブル操作中はIME自動OFF対象（N9(c)）
         setFontSize(table, Const.FONT_SIZE_TABLE);
         setFontSize(table.getTableHeader(), Const.FONT_SIZE_TABLE);
         // フォント拡大で文字が行内に収まりきらなくなるのを防ぐため、行高をフォント基準で広げる
