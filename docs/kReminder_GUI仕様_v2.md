@@ -455,6 +455,42 @@ leadWindowOf(repeat):        # 間隔クラス → 先読み窓
 - **⑤ポップアップ配線（Extend・§5.3）**では、ポップアップから開く instant 編集ダイアログの owner を
   MainWindow にすることで、他の発火ポップアップが生きたまま残る。
 
+### 4.11 IME 自動切替（N9(c)）
+
+フォーカスが当たった欄の性質に応じて IME を自動 On/Off する。**OFF はデフォルトを半角に倒すだけ**で、
+手動で全角へ切り替えることは禁じない（`enableInputMethods(false)` は不使用＝IME 自体は封じない）。
+失敗時（`InputContext` が取れない・例外が飛ぶ等）は黙って何もしない（利便機能であり、アプリの動作を
+一切妨げない）。
+
+**OFF 対象**：テーブル（`MainWindow`）／実行時刻欄（通常モード `DateTimeField`・instant モード
+`InstantField` とも、それぞれのウィジェット自身のコンストラクタで自己配線する）／繰り返し欄／Cmd 欄。
+
+**ON 対象**：コメント欄／検索欄。
+
+**実装は3層構成**（`ImeControl`）。フォーカス移動の方向によって、単独では確実に効かないケースがあるため、
+狙いの異なる3つの仕掛けを重ねている。
+
+1. **`focusGained` で即時適用**（`ImeControl.off`/`on` が付与する `FocusAdapter`）：同一ウィンドウ内で
+   欄から欄へフォーカスが移る通常のケースを担当する。
+2. **`windowGainedFocus`＋`invokeLater` で掛け直し**（`ImeControl.installWindowHook`。`MainWindow`・
+   `EditDialog` それぞれの組み立て時に1回登録）：起動直後やウィンドウがアクティブ化された直後は、
+   フォーカス保持者への `focusGained` がウィンドウ自体のアクティブ化より先に飛んだり、
+   `getPermanentFocusOwner()` がまだ移譲元を指したまま呼ばれたりする（＝1つ目の仕掛けが空振りする）
+   ため、ウィンドウ活性化イベントの中でその時点のフォーカス保持者を改めて読み直して掛け直す。
+   フォーカス移譲がイベントキュー上でまだ完了していないタイミング競合があるため、
+   処理全体を `SwingUtilities.invokeLater` で1テンポ遅らせて実行する。
+3. **`EditDialog` は `dispose()` 冒頭で自ら半角へ倒す**（`ImeControl.applyOff`）：`EditDialog` を全角の
+   まま閉じて `MainWindow` に戻る場合、戻った側（2つ目の仕掛け）での掛け直しはフォーカス移譲の
+   タイミング次第で原理的に競合を避けられない。「去る側が自分で倒してから消える」ことで、
+   タイミングに依存せず確実に半角へ戻す。まだダイアログが表示中＝ `InputContext` が取れるうちに
+   呼ぶ必要があるため、`super.dispose()` より前に呼ぶ。
+
+**×ボタンも他3経路（OK・キャンセル・Esc）と同じ `dispose()` に集約した**：`EditDialog` は元々
+`setDefaultCloseOperation` を指定しておらず、`JDialog` の既定値 `HIDE_ON_CLOSE`（＝`setVisible(false)`
+のみ）のままだった。これだと×ボタンだけ `dispose()` を素通りし、`previewTimer` が停止しない
+（既存の潜在バグ）うえ、上記3つ目の IME 復帰も効かない。`setDefaultCloseOperation(DO_NOTHING_ON_CLOSE)`
+を指定し `windowClosing` から `dispose()` を呼ぶことで、4経路すべてが同じ後始末を通るようにした。
+
 ---
 
 ## 5. priority ↔ 通知 の対応（§4.5/§10 の確定版）
@@ -675,6 +711,11 @@ Pri-1 のみ `autoCloseAfter=5秒・showExtend=false`、Pri-2〜Pri-5 は `autoC
   内部でネストしたイベントループを回すため、その間も1秒 Timer は動き続け `checkReminders` が走りうる。
   `(Ext) ` 自動削除でリストが縮む経路ができたことでこの stale index 問題が顕在化したため、ダイアログが
   閉じた後は `reminders.indexOf(r)` の参照一致で行を引き直す運用に統一した（§5.4）。
+- **（N9(c)）IME 自動切替は1層では足りず3層にした**：フォーカス移動時の `focusGained` だけでは
+  起動直後・ウィンドウ活性化直後・`EditDialog` が全角のまま閉じる場合の3ケースで空振りが実測された。
+  「戻る側で掛け直す」（`windowGainedFocus`＋`invokeLater`）と「去る側が自分で倒す」（`EditDialog.dispose()`
+  冒頭の `applyOff`）を重ねることで、タイミング競合を避けた（§4.11）。ついでに `EditDialog` の×ボタンが
+  `dispose()` を素通りしていた既存の未集約経路も、この過程で見つけて他3経路に揃えた。
 
 **旧版から意図的に変えた点**：過去エラー→翌日送り／`COMPUTERNAME` 依存座標の排除／フィルタ論理の全面再設計／action を列と priority から独立させた／マルチモニタ非依存／**（v2）日本語化の dai 隠しバグ修正・`曜日=` 廃止・年/週の倍数畳み・非月次 kuriage をエラー化**。
 
