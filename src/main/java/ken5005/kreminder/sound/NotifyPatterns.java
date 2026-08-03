@@ -19,31 +19,31 @@ public final class NotifyPatterns {
 
     // 各Priの最大鳴動時間（NotifyPattern.maxDuration）
     private static final Duration MAX_PRI2 = Duration.ofMinutes(5);
-    private static final Duration MAX_PRI3 = Duration.ofMinutes(10);
+    private static final Duration MAX_PRI3 = Duration.ofMinutes(5);
     private static final Duration MAX_PRI4 = Duration.ofHours(2);
     private static final Duration MAX_PRI5 = Duration.ofHours(12);
 
     private static final NotifyPattern PRI1 =
-            new NotifyPattern(List.of(new NotifyStep("Small", VOLUME, 0)), 0, null);
+            new NotifyPattern(List.of(new NotifyStep("Small", VOLUME*0.3f, 0)), 0, null);
 
-    private static final NotifyPattern PRI2 = new NotifyPattern(
-            List.of(new NotifyStep("Notify", VOLUME, 10_000)), 1, MAX_PRI2);
+    private static final NotifyPattern PRI2 =
+            new NotifyPattern(List.of(new NotifyStep("Finish", VOLUME*0.3f, 0)), 0, null);
 
     private static final NotifyPattern PRI3 = new NotifyPattern(
-            List.of(new NotifyStep("Standard", VOLUME, 5_000)), 1, MAX_PRI3);
+            List.of(new NotifyStep("Standard", VOLUME*0.7f, 300_000)), 1, MAX_PRI3);
 
     private static final NotifyPattern PRI4 = new NotifyPattern(
             concat(
-                    rep(new NotifyStep("Standard", VOLUME, 500), 3),
-                    rep(new NotifyStep("Standard", VOLUME, 5_000), 3),
-                    rep(new NotifyStep("Watchout", VOLUME, 5_000), 10),
+                    rep(new NotifyStep("Standard", VOLUME, 500), 2),
+                    rep(new NotifyStep("Standard", VOLUME, 30_000), 3),
+                    rep(new NotifyStep("Watchout", VOLUME, 30_000), 10),
                     rep(new NotifyStep("Watchout", VOLUME, 60_000), 1)
             ), 1, MAX_PRI4);
 
     private static final NotifyPattern PRI5 = new NotifyPattern(
             concat(
                     rep(new NotifyStep("Standard", VOLUME, 500), 5),
-                    rep(new NotifyStep("Watchout", VOLUME, 5_000), 10),
+                    rep(new NotifyStep("Watchout", VOLUME, 30_000), 10),
                     rep(new NotifyStep("Serious", VOLUME, 60_000), 1)
             ), 1, MAX_PRI5);
 
