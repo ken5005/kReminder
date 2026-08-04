@@ -18,4 +18,10 @@ public final class Const {
     public static final int POPUP_BG_RGB = 0xDDDDDD;       // 発火ポップアップの背景色
     public static final int POPUP_FLASH_RGB = 0xFF8080;    // 発火フラッシュの色（薄い赤）。手で調整可
     public static final int POPUP_FLASH_FADE_MS = 1000;    // 赤→通常背景へ戻すフェード時間(ms)
+
+    // 消音中ダイアログを画面中央からどれだけ右上にずらすか（発火ポップアップ1枚目＝中央と重ならないため）
+    public static final int SILENT_DIALOG_OFFSET_X = 160;  // 右方向・px
+    public static final int SILENT_DIALOG_OFFSET_Y = 120;  // 上方向・px（値は正で持ち、使う側で引く）
+
+    public static final int SILENT_DIALOG_BG_RGB = 0x00CC00; // 消音中ダイアログの背景色（緑）。手で調整可
 }

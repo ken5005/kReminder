@@ -135,8 +135,9 @@
 | `MainWindow` の rootPane（`WHEN_IN_FOCUSED_WINDOW`） | Ctrl+N | 新規 |
 | 〃 | Ctrl+D | 複製 |
 | 〃 | Ctrl+I | instant 起動 |
+| 〃 | Ctrl+S | 消音モード（§5.6） |
 
-テーブルの3キーを `WHEN_FOCUSED` に限定するのは、検索欄でのスペース入力・文字削除を殺さないため（window スコープにはしない）。Ctrl+N/Ctrl+D/Ctrl+I は編集ダイアログ・発火ポップアップなど別ウィンドウにフォーカスがある間は発火しない（意図どおり）。
+テーブルの3キーを `WHEN_FOCUSED` に限定するのは、検索欄でのスペース入力・文字削除を殺さないため（window スコープにはしない）。Ctrl+N/Ctrl+D/Ctrl+I/Ctrl+S は編集ダイアログ・発火ポップアップなど別ウィンドウにフォーカスがある間は発火しない（意図どおり）。
 
 テーブルの3キーが `WHEN_FOCUSED` である以上、テーブルにフォーカスが無いと効かない。そのため起動直後（`windowOpened`）と編集/instant ダイアログを閉じた後はテーブルへフォーカスを戻す。そうしないと、たとえば起動直後は新規ボタンにフォーカスが乗ったままで Space＝instant が効かない。
 
@@ -566,6 +567,33 @@ Pri-1 のみ `autoCloseAfter=5秒・showExtend=false`、Pri-2〜Pri-5 は `autoC
   頭から鳴らし始める（＝担当を引き継ぐ）。
 - この不変条件（＝開いているポップアップのうち最優先のエントリが担当）は Main 側で1メソッドに
   集約する（実装詳細は実装計画側）。
+
+### 5.6 消音モード
+
+- **入口**：ツールバーの `消音` トグルボタン、または Ctrl+S。トグルではなく「消音中は前面に出すだけ」——
+  消音中にもう一度ボタンや Ctrl+S を押しても解除されず、`消音中。。` ダイアログが前面に出るだけ。
+- **解除経路**：`消音中。。` ダイアログの `終了` ボタンと × の2つだけ。ダイアログは発火ポップアップと
+  同じく非フォーカス窓（`setFocusableWindowState(false)`）なので、両経路ともマウス操作専用。
+- **抑制範囲**：消音中は Pri1〜Pri3 の発火ポップアップに限り、継続音・新着1回鳴らし・色フラッシュを
+  出さない。Pri4/Pri5 は消音中でも通常どおり鳴る。
+- **実装点**：抑制は2箇所に実装している。
+  - `Main.retuneNotification()` の担当選びで、消音中に抑制対象（Pri1〜Pri3）のエントリを
+    継続音の担当候補から除外する。
+  - `Main.showPopup()` の「担当外なら新着に気づけるよう1回だけ鳴らす」処理を、抑制対象なら
+    まるごとスキップする。
+  - 両者とも判定は `Main.isSuppressedBySilentMode()`（`SilentMode.isOn() && Pri1〜Pri3`）に集約。
+- **ON/OFF 時の再整列**：`SilentMode.setOnChange(Main::retuneNotification)` により、ON/OFF が
+  切り替わった瞬間に `retuneNotification()` が走る。解除した瞬間、開いたままのPri1〜Pri3ポップアップが
+  鳴り直す。
+- **マーカーファイル**：`<base>/.silentmode`。中身は空で、外部ツールが消音状態を見るためのもの。
+  `SilentMode.turnOn()/turnOff()` に連動して作成・削除されるほか、アプリの起動時・終了時にも
+  `SilentMode.removeMarker()` で残骸が消される。
+- **消音中ダイアログの見た目**：背景色は `Const.SILENT_DIALOG_BG_RGB`（緑）。ラベル文字列
+  `消音中。。` の前後に半角空白24個ずつを入れて横長に見せ、目立たせている。表示位置は画面中央から
+  右に `Const.SILENT_DIALOG_OFFSET_X`・上に `Const.SILENT_DIALOG_OFFSET_Y` だけずらし
+  （発火ポップアップの1枚目＝中央と重ならないため）、使用可能領域をはみ出す場合はクランプする。
+- **注意**：抑制範囲の判定（Pri1〜Pri3）は `Reminder.Priority` enum の宣言順（ordinal）に依存する。
+  enum に値を追加・並べ替えする場合は `Main.isSuppressedBySilentMode()` も見直すこと。
 
 ---
 

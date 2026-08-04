@@ -13,6 +13,7 @@ import ken5005.kreminder.Reminder;
 import ken5005.kreminder.ReminderFilter;
 import ken5005.kreminder.ReminderStore;
 import ken5005.kreminder.RepeatSpec;
+import ken5005.kreminder.SilentMode;
 import ken5005.kreminder.WindowBoundsLogic;
 import ken5005.kreminder.debug.DEB;
 
@@ -71,6 +72,10 @@ public class MainWindow extends JFrame {
     private JCheckBox showLowPriorityCheck;
     private JCheckBox showAllRepeatCheck;
     private JTextField searchField;
+
+    // 消音モード（GUI仕様v2 §5.6）。ボタンの見た目切り替えとダイアログの二重生成防止に使う
+    private JToggleButton silentButton;
+    private SilentModeDialog silentDialog;
 
     private boolean debugPanelOpen = false;
     // 展開時の分割位置を絶対pxではなく比率(0.0〜1.0)で保持する（窓高さが変わっても破綻しないため）。
@@ -188,7 +193,7 @@ public class MainWindow extends JFrame {
     }
 
     /**
-     * 新規(Ctrl+N)・複製(Ctrl+D)・instant(Ctrl+I)をウィンドウ全体のキーバインドとして登録する（GUI仕様v2 §2.5.6）。
+     * 新規(Ctrl+N)・複製(Ctrl+D)・instant(Ctrl+I)・消音(Ctrl+S)をウィンドウ全体のキーバインドとして登録する（GUI仕様v2 §2.5.6）。
      * rootPaneのWHEN_IN_FOCUSED_WINDOWに置くことで、検索欄やテーブルなどフォーカス位置に関わらず効く。
      * 別ウィンドウ（EditDialog・発火ポップアップ）にフォーカスが移っている間はこの窓の外なので発火しない。
      */
@@ -210,6 +215,11 @@ public class MainWindow extends JFrame {
         actionMap.put("kreminder.instant", new AbstractAction() {
             @Override public void actionPerformed(ActionEvent e) { onInstantButton(); }
         });
+
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_S, InputEvent.CTRL_DOWN_MASK), "kreminder.silent");
+        actionMap.put("kreminder.silent", new AbstractAction() {
+            @Override public void actionPerformed(ActionEvent e) { onSilentButton(); }
+        });
     }
 
     /** 上段=既存ツールバー・下段=フィルタバーの2段組みを1枚のパネルにまとめる。 */
@@ -225,7 +235,15 @@ public class MainWindow extends JFrame {
         var bar = new JToolBar();
         bar.setFloatable(false); // ドラッグで切り離せないようにする（常設ツールバーの慣用）
 
-        for (String name : new String[]{"新規", "instant", "編集", "複製", "削除", "更新", "デバッグログ"}) {
+        for (String name : new String[]{"新規", "instant", "編集", "複製", "削除", "消音", "デバッグログ"}) {
+            // 消音だけはJToggleButton（トグル状態を持つ）なので、ループの型を崩さずここだけ別出しにする
+            if (name.equals("消音")) {
+                silentButton = new JToggleButton(name);
+                setFontSize(silentButton, Const.FONT_SIZE_BUTTON);
+                silentButton.addActionListener(e -> onSilentButton());
+                bar.add(silentButton);
+                continue;
+            }
             var btn = new JButton(name);
             setFontSize(btn, Const.FONT_SIZE_BUTTON);
             switch (name) {
@@ -235,15 +253,36 @@ public class MainWindow extends JFrame {
                 case "instant" -> btn.addActionListener(e -> onInstantButton());
                 case "複製" -> btn.addActionListener(e -> onDuplicateButton());
                 case "削除" -> btn.addActionListener(e -> onDeleteButton());
-                // 「更新」は今回もダミー配線のまま（スコープ外・GUI仕様v2 §2.5関連スライドで対応予定）
-                default -> btn.addActionListener(e -> {
-                    statusBar.setText(name + " が押されました");
-                    DEB.pr(name + " が押されました");
-                });
             }
             bar.add(btn);
         }
         return bar;
+    }
+
+    /**
+     * 消音ボタン（またはCtrl+S）の処理。既にダイアログが開いていればトグル解除はせず前面に出すだけ
+     * （仕様どおり＝解除経路はダイアログの終了ボタンと×だけに絞る）。
+     * 未表示ならSilentMode.turnOn()してダイアログを開き、ボタンの見た目を「消音中」に切り替える。
+     */
+    private void onSilentButton() {
+        if (silentDialog != null) {
+            silentDialog.toFront();
+            silentButton.setSelected(true);
+            return;
+        }
+        SilentMode.turnOn();
+        silentDialog = new SilentModeDialog(this::onSilentDialogClosed);
+        silentDialog.setVisible(true);
+        silentButton.setSelected(true);
+        silentButton.setText("消音中");
+    }
+
+    /** SilentModeDialogが終了ボタンまたは×で閉じられたときに呼ばれる。消音状態を解除して見た目を戻す。 */
+    private void onSilentDialogClosed() {
+        silentDialog = null;
+        SilentMode.turnOff();
+        silentButton.setSelected(false);
+        silentButton.setText("消音");
     }
 
     /**

@@ -123,6 +123,9 @@ public class Main {
         // AppDir.init はmain()の一手目（--help判定の直後）で呼ぶ。この後すぐ動くHolidayOverride.load /
         // HolidayService.loadInitial がinvokeLaterより前でベースフォルダを参照するため、他の初期化より先に確定させる。
         AppDir.init(Path.of(parsedArgs.basePath()));
+        // 前回クラッシュ等の残骸を黙って消してから通常起動する。この時点でDEBは未初期化だが、
+        // removeMarker()内のDEB.pr(e)はDEB未initならSystem.outへ直接落ちるフォールバックがあるため問題ない
+        SilentMode.removeMarker();
         // 存在チェックはここで一度だけ行う。打ち間違いで空フォルダが自動生成される事故を防ぐため
         // 自動作成はせず、無ければUsage表示付きでabort（javaw起動でも見えるようFatalErrorDialogを使う）
         if (!Files.isDirectory(AppDir.base())) {
@@ -187,6 +190,9 @@ public class Main {
             List<Reminder> reminders = store.load();
             if (remindersWasAbsent) store.save(reminders); // 空リストのまま reminders.json を実体化する
             window = new MainWindow(clock, reminders, store);
+            // 消音ON/OFFの瞬間に交通整理を1回走らせる（GUI仕様v2 §5.6）。
+            // MainWindowからMainを直接呼ばずに済ませるための配線＝この向きは変えないこと
+            SilentMode.setOnChange(Main::retuneNotification);
             PanelSink panelSink = new PanelSink(window.getDebugTextArea());
             DEB.init(clock, new ConsoleSink(), new FileSink(clock), panelSink);
 
@@ -530,32 +536,46 @@ public class Main {
         return p.ordinal();
     }
 
+    /** 消音中かつ優先度がPri1〜Pri3なら、そのリマインダーの発火ポップアップは音・フラッシュの抑制対象（GUI仕様v2 §5.6）。 */
+    private static boolean isSuppressedBySilentMode(Reminder r) {
+        return SilentMode.isOn() && priorityRank(r) <= Reminder.Priority.Pri3.ordinal();
+    }
+
+    /** 継続音の担当を降ろす（handleをstopしてnotifyingEntry/notifyingHandleをnullに戻す）。 */
+    private static void stopNotifying() {
+        if (notifyingHandle != null) notifyingHandle.stop();
+        notifyingEntry = null;
+        notifyingHandle = null;
+    }
+
     /**
      * 「開いているポップアップのうち priority が最も高いエントリが、継続音の担当である」という
      * 不変条件をここに集約する（GUI仕様v2 §5.5）。showPopup・windowClosedの両方から呼ばれる。
      * 同率なら先着優先＝リストは開いた順に並んでいるので、先頭から見て「厳密に上回った時だけ」
-     * 更新すれば自然に先着優先になる。
+     * 更新すれば自然に先着優先になる。消音中に抑制されるエントリ（Pri1〜Pri3）は候補から除外する（GUI仕様v2 §5.6）。
      */
     private static void retuneNotification() {
         // Extend編集中は担当を立てない（N7）: openPopupsが空のときと同じ形で担当を降ろすだけにする
         if (notificationSuspended) {
-            if (notifyingHandle != null) notifyingHandle.stop();
-            notifyingEntry = null;
-            notifyingHandle = null;
+            stopNotifying();
             return;
         }
         if (openPopups.isEmpty()) {
-            if (notifyingHandle != null) notifyingHandle.stop();
-            notifyingEntry = null;
-            notifyingHandle = null;
+            stopNotifying();
             return;
         }
 
-        PopupEntry best = openPopups.get(0);
+        PopupEntry best = null;
         for (PopupEntry entry : openPopups) {
-            if (priorityRank(entry.reminder()) > priorityRank(best.reminder())) {
+            if (isSuppressedBySilentMode(entry.reminder())) continue;
+            if (best == null || priorityRank(entry.reminder()) > priorityRank(best.reminder())) {
                 best = entry;
             }
+        }
+        if (best == null) {
+            // 全件が消音で抑制されている＝openPopupsが空のときと同じ扱い
+            stopNotifying();
+            return;
         }
         if (best == notifyingEntry) return; // 既に担当なら鳴らし直さない
 
@@ -685,7 +705,8 @@ public class Main {
         PopupEntry entry = new PopupEntry(r, dialog);
         openPopups.add(entry);
         retuneNotification();
-        if (notifyingEntry != entry) {
+        // 消音で抑制される場合（Pri1〜Pri3・消音中）は新着の1回鳴らし・フラッシュも出さない（GUI仕様v2 §5.6）
+        if (notifyingEntry != entry && !isSuppressedBySilentMode(r)) {
             NotifyStep firstStep = NotifyPatterns.forPriority(r.priority).steps().get(0);
             SND.play(firstStep.soundName(), firstStep.volume());
             flashPopup(dialog); // 担当外でも新着に気づけるよう1回だけ光らせる
@@ -754,6 +775,7 @@ public class Main {
         if (trayIcon != null) {
             SystemTray.getSystemTray().remove(trayIcon);
         }
+        SilentMode.removeMarker(); // ログが出るうちに済ませるためDEB.shutdown()より前に置く
         DEB.shutdown();
         SND.shutdown();
         instanceLock.release();
