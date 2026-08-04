@@ -268,8 +268,8 @@ public boolean NotifyHandle.awaitTermination(long ms)   // テスト用
 | Pri | ステップ列（`(音, 待ち)` の並び） | repeatTail | maxDuration |
 |---|---|---|---|
 | Pri1 | `(Small, -)` ×1 | 0（繰り返しなし） | null |
-| Pri2 | `(Notify, 10秒)` ×1 | 1（そのまま繰り返す） | 5分 |
-| Pri3 | `(Standard, 5秒)` ×1 | 1（そのまま繰り返す） | 10分 |
+| Pri2 | `(Finish, -)` ×1 | 0（繰り返しなし） | null |
+| Pri3 | `(Standard, 5分)` → `(Standard, -)` | 0（繰り返しなし） | null |
 | Pri4 | `(Standard, 0.5秒)`×3 → `(Standard, 5秒)`×3 → `(Watchout, 5秒)`×10 → `(Watchout, 60秒)`×1 | 1（末尾の `Watchout(60秒)` だけ繰り返す） | 2時間 |
 | Pri5 | `(Standard, 0.5秒)`×5 → `(Watchout, 5秒)`×10 → `(Serious, 60秒)`×1 | 1（末尾の `Serious(60秒)` だけ繰り返す） | 12時間 |
 
