@@ -22,4 +22,6 @@ public final class Const {
     // 消音中ダイアログを画面中央からどれだけ右上にずらすか（発火ポップアップ1枚目＝中央と重ならないため）
     public static final int SILENT_DIALOG_OFFSET_X = 160;  // 右方向・px
     public static final int SILENT_DIALOG_OFFSET_Y = 120;  // 上方向・px（値は正で持ち、使う側で引く）
+
+    public static final int SILENT_DIALOG_BG_RGB = 0x00CC00; // 消音中ダイアログの背景色（緑）。手で調整可
 }

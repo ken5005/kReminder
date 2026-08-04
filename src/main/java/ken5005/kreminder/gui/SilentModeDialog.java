@@ -18,13 +18,17 @@ public class SilentModeDialog extends JDialog {
         // 発火ポップアップ（Main.showPopup）と同じくowner=null（変更禁止・設計上の厳守事項）
         super((Frame) null, "kReminder", false);
 
-        JLabel label = new JLabel("消音中。。");
+        getContentPane().setBackground(new Color(Const.SILENT_DIALOG_BG_RGB));
+
+        // 前後に半角空白24個ずつ入れて横長に見せ、目立たせる（狙いどおりの表示・誤字ではない）
+        JLabel label = new JLabel("                        消音中。。                        ");
         label.setBorder(BorderFactory.createEmptyBorder(16, 16, 8, 16));
         getContentPane().add(label, BorderLayout.CENTER);
 
         JButton closeButton = new JButton("終了");
         closeButton.addActionListener(e -> dispose());
         JPanel south = new JPanel();
+        south.setOpaque(false); // contentPaneの背景色（緑）を透かして見せるため（Main.showPopupと同じ手筋）
         south.add(closeButton);
         getContentPane().add(south, BorderLayout.SOUTH);
 
