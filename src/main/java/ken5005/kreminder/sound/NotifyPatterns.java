@@ -18,8 +18,6 @@ public final class NotifyPatterns {
     private static final float VOLUME = 1.0f;
 
     // 各Priの最大鳴動時間（NotifyPattern.maxDuration）
-    private static final Duration MAX_PRI2 = Duration.ofMinutes(5);
-    private static final Duration MAX_PRI3 = Duration.ofMinutes(5);
     private static final Duration MAX_PRI4 = Duration.ofHours(2);
     private static final Duration MAX_PRI5 = Duration.ofHours(12);
 
@@ -29,8 +27,14 @@ public final class NotifyPatterns {
     private static final NotifyPattern PRI2 =
             new NotifyPattern(List.of(new NotifyStep("Finish", VOLUME*0.3f, 0)), 0, null);
 
+    // 「鳴らして5分後にもう一度鳴らして終わり」＝2ステップを並べてrepeatTail=0で流し切る形にする。
+    // steps=1本・repeatTail=1のままだと、phase1の5分待ちが終わる前にmaxDuration=5分のdeadlineへ
+    // 達してしまい実質「1回鳴って終わり」になってrepeatTailが効かない（旧表の不具合）。
     private static final NotifyPattern PRI3 = new NotifyPattern(
-            List.of(new NotifyStep("Standard", VOLUME*0.7f, 300_000)), 1, MAX_PRI3);
+            List.of(
+                    new NotifyStep("Standard", VOLUME * 0.7f, 300_000), // 鳴らして5分待つ
+                    new NotifyStep("Standard", VOLUME * 0.7f, 0)        // もう一度鳴らして終わり
+            ), 0, null);
 
     private static final NotifyPattern PRI4 = new NotifyPattern(
             concat(

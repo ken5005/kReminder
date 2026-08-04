@@ -507,8 +507,8 @@ priority に紐づくのは**音声ファイルそのものではなく「鳴ら
 | Pri-1 | Small ×1（繰り返しなし） | **5秒で自動消滅**・**Extend ボタンなし**（OK のみ） | 軽い通知 |
 | Pri-2 | Notify を **10秒間隔**で繰り返し・最大**5分** | 自動消滅なし・OK / Extend | |
 | Pri-3 | Standard を **5秒間隔**で繰り返し・最大**10分** | 自動消滅なし・OK / Extend | 既定 |
-| Pri-4 | Standard(待ち0.5秒)×3 → Standard(待ち5秒)×3 → Watchout(待ち5秒)×10 → Watchout(待ち60秒) を以降ずっと繰り返し・最大**2時間** | 自動消滅なし・OK / Extend | |
-| Pri-5 | Standard(待ち0.5秒)×5 → Watchout(待ち5秒)×10 → Serious(待ち60秒) を以降ずっと繰り返し・最大**12時間** | 自動消滅なし・OK / Extend | 目覚まし級 |
+| Pri-4 | Standard(待ち0.5秒)×2 → Standard(待ち30秒)×3 → Watchout(待ち30秒)×10 → Watchout(待ち60秒) を以降ずっと繰り返し・最大**2時間** | 自動消滅なし・OK / Extend | |
+| Pri-5 | Standard(待ち0.5秒)×5 → Watchout(待ち30秒)×10 → Serious(待ち60秒) を以降ずっと繰り返し・最大**12時間** | 自動消滅なし・OK / Extend | 目覚まし級 |
 
 ※「待ちN秒」は `SoundWorker` が再生を終えてから N秒待つ意味（クリップ長は別途加算される）。
 ※ Pri-2〜Pri-5 は OK / Extend で止む（§5.3 のウィンドウ close 一本化のまま）。
