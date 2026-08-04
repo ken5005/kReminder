@@ -1,12 +1,12 @@
 # kReminder コード地図 v1
 
-最終更新: 2026-07-26（chat59 G1+G2 で表示整形の純関数 FireAtFormat を新設）。
+最終更新: 2026-08-05（消音モードで SilentMode／SilentModeDialog を新設。記載漏れだった ImeControl も追加）。
 
 このファイルは kReminder の**コード構造の正典**＝「どのクラスが何を担い、誰に依存するか」の地図。粒度は**クラス／パッケージ＋依存の向き**まで（メソッド単位は即腐るので書かない）。**設計判断の「なぜ」や急所は handoff A3 が正**（stale index ルール、発火ポップアップの owner=null 厳守など）＝この地図は骨格、handoff は骨格の理由。仕様の逐語は `docs/` の正典8冊が正。
 
 真実源はコード。この地図と実ソースが食い違ったら**実ソースが正**。メンテ規則は §5。
 
-対象＝`src/main/java` の本体68クラス（テスト23本・`docs/`・`testdata/` は対象外）。
+対象＝`src/main/java` の本体71クラス（テストは対象外・`docs/`・`testdata/` も対象外）。
 
 ---
 
@@ -34,6 +34,7 @@
 | from → to | 依存の中身 |
 |---|---|
 | `Main`(root) → 全パッケージ | 起動時に各サブシステムを生成・配線し、発火ループを回す唯一の場所 |
+| `(root)`（Main以外） → `debug` | `SilentMode`がマーカーファイルI/O失敗時に`DEB.pr`でログ（消音モードで新設） |
 | `gui` → `(root)` / `debug` / `sound` | 器がドメイン純関数を呼ぶ／`DEB`でログ／`EditDialog`が`SND`で警告音 |
 | `sound` → `(root)` / `debug` | `NotifyPatterns`が`Reminder`のPriを見る／各所で`DEB` |
 | `holiday` → `(root)` | `AppDir`でパス解決／`HolidayCheck`を実装 |
@@ -90,6 +91,7 @@ kReminder は「純関数層／Swing器層／静的ファサード＋ワーカ�
 | `MonitorBounds` | モニタ1台分の表示領域を表す値の入れ物（record・AWT非依存） | （葉） |
 | `WindowBoundsLogic` | 保存されたウィンドウ矩形／ダイアログサイズを現在のモニタ構成に照らして安全化する純関数群 | → MonitorBounds, Config |
 | `ColumnWidthsCodec` | テーブル列幅とカンマ区切り文字列の相互変換（純関数） | （葉） |
+| `SilentMode` | 消音モードのON/OFF状態＋マーカーファイル(`<base>/.silentmode`)の作成・削除を担う静的ファサード | → AppDir／debug.DEB |
 
 ### 3.2 `gui` — Swing の器
 
@@ -106,6 +108,8 @@ kReminder は「純関数層／Swing器層／静的ファサード＋ワーカ�
 | `DebugPanel` | デバッグログ表示パネル（薄いビュー） | （葉） |
 | `PanelSink` | DEBログをデバッグパネルへ流すsink | → debug.DEB, debug.LogSink |
 | `FatalErrorDialog` | 致命エラーをloudに知らせ即終了する汎用ヘルパー | （葉） |
+| `ImeControl` | フォーカス連動でIMEのOn/Offを自動切替するユーティリティ（N9(c)） | （葉） |
+| `SilentModeDialog` | 消音中を示す非モーダルダイアログ（器・終了ボタン／×でonClosedを呼ぶだけ） | → root.Const |
 
 ### 3.3 `sound` — 音声再生＋通知パターン
 
