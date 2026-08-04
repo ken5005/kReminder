@@ -270,8 +270,8 @@ public boolean NotifyHandle.awaitTermination(long ms)   // テスト用
 | Pri1 | `(Small, -)` ×1 | 0（繰り返しなし） | null |
 | Pri2 | `(Finish, -)` ×1 | 0（繰り返しなし） | null |
 | Pri3 | `(Standard, 5分)` → `(Standard, -)` | 0（繰り返しなし） | null |
-| Pri4 | `(Standard, 0.5秒)`×3 → `(Standard, 5秒)`×3 → `(Watchout, 5秒)`×10 → `(Watchout, 60秒)`×1 | 1（末尾の `Watchout(60秒)` だけ繰り返す） | 2時間 |
-| Pri5 | `(Standard, 0.5秒)`×5 → `(Watchout, 5秒)`×10 → `(Serious, 60秒)`×1 | 1（末尾の `Serious(60秒)` だけ繰り返す） | 12時間 |
+| Pri4 | `(Standard, 0.5秒)`×2 → `(Standard, 30秒)`×3 → `(Watchout, 30秒)`×10 → `(Watchout, 60秒)`×1 | 1（末尾の `Watchout(60秒)` だけ繰り返す） | 2時間 |
+| Pri5 | `(Standard, 0.5秒)`×5 → `(Watchout, 30秒)`×10 → `(Serious, 60秒)`×1 | 1（末尾の `Serious(60秒)` だけ繰り返す） | 12時間 |
 
 「待ちN秒」は `SoundWorker` が再生を終えてから N秒待つ意味（`NotifyStep.delayAfterMs`）。クリップ
 自体の再生時間は別途加算される（＝実際のステップ間隔はクリップ長+delayAfterMs）。Pri1 はポップアップ
